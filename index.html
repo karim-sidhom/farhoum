@@ -1156,7 +1156,7 @@ var ALA_CATS=[
 var ALA_R=3000, ALA_MOVE=150;
 var alaLayer=L.layerGroup().addTo(map), alaState={}, alaQueue=[], alaBusy=false, alaPoi={};
 function alaQ(c,lat,lon,r){
-  return '[out:json][timeout:25];(node["'+c.k+'"="'+c.v+'"'+(c.x?'["'+c.x[0]+'"="'+c.x[1]+'"]':'')+'](around:'+r+','+lat+','+lon+'););out body 100;';
+  return '[out:json][timeout:25];(node["'+c.k+'"="'+c.v+'"'+(c.x?'["'+c.x[0]+'"="'+c.x[1]+'"]':'')+'](around:'+r+','+lat+','+lon+'););out body 40;';
 }
 function alaRelease(key){
   var st=alaState[key]; if(!st||!st.pois) return;
@@ -1187,21 +1187,14 @@ function alaSay(t){
   b.textContent=t;
 }
 async function alaFetch(q){
-  var err='';
-  for(var t=0;t<ALA_EP.length;t++){
-    var ep=ALA_EP[(alaEp+t)%ALA_EP.length];
-    for(var a=0;a<3;a++){
-      try{
-        var ctl=new AbortController(), tm=setTimeout(function(){ctl.abort();},45000);
-        var r=await fetch(ep,{method:'POST',body:'data='+encodeURIComponent(q),signal:ctl.signal});
-        clearTimeout(tm);
-        if(r.status===429||r.status===504||r.status===502){ err='HTTP '+r.status; await new Promise(function(res){ setTimeout(res,4000); }); continue; }
-        if(!r.ok) throw new Error('HTTP '+r.status);
-        var j=await r.json(); alaEp=(alaEp+t)%ALA_EP.length; return j.elements||[];
-      }catch(e){ err=String(e&&e.message||e); if(err.indexOf('HTTP')!==0) break; }
-    }
+  /* نفس طلب مصباح علاء الدين، مع انتظار وإعادة المحاولة عندما يردّ Overpass بـ"مشغول" (429/504) */
+  for(var a=0;a<5;a++){
+    var res=await fetch('https://overpass-api.de/api/interpreter',{method:'POST',body:'data='+encodeURIComponent(q)});
+    if(res.status===429||res.status===504||res.status===502){ alaSay('⏳ Overpass مشغول ('+res.status+') — إعادة المحاولة…'); await new Promise(function(r){ setTimeout(r,6000+a*4000); }); continue; }
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    var j=await res.json(); return j.elements||[];
   }
-  throw new Error(err);
+  throw new Error('Overpass مشغول (429)');
 }
 async function alaWork(){
   if(alaBusy) return; alaBusy=true;
@@ -1215,10 +1208,10 @@ async function alaWork(){
       alaSay('🔎 '+c.e+' '+c.ar+' … ('+(i+1)+'/'+ALA_CATS.length+') — '+found);
       for(var k=0;k<radii.length&&!got;k++){
         try{ var els=await alaFetch(alaQ(c,u.lat,u.lon,radii[k])); got=alaAdd(key,u,c,els); }
-        catch(e){ fails++; lastErr=String(e&&e.message||e); alaSay('⚠️ '+c.ar+': '+lastErr); break; }
+        catch(e){ lastErr=String(e&&e.message||e); if(k===radii.length-1) fails++; }
       }
       found+=got;
-      await new Promise(function(res){ setTimeout(res,300); });
+      await new Promise(function(res){ setTimeout(res,1500); });
     }
     if(fails>=ALA_CATS.length){ st.lat=null; alaSay('⚠️ علاء الدين: '+lastErr); await new Promise(function(res){ setTimeout(res,10000); }); }
     else alaSay('✅ علاء الدين: '+found+' / '+ALA_CATS.length+(fails?' ('+fails+' ⚠️ '+lastErr+')':''));
