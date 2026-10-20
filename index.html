@@ -1156,7 +1156,7 @@ var ALA_CATS=[
 var ALA_R=3000, ALA_MOVE=150;
 var alaLayer=L.layerGroup().addTo(map), alaState={}, alaQueue=[], alaBusy=false, alaPoi={};
 function alaQ(c,lat,lon,r){
-  return '[out:json][timeout:25];(node["'+c.k+'"="'+c.v+'"'+(c.x?'["'+c.x[0]+'"="'+c.x[1]+'"]':'')+'](around:'+r+','+lat+','+lon+'););out body 40;';
+  return '[out:json][timeout:25];(node["'+c.k+'"="'+c.v+'"'+(c.x?'["'+c.x[0]+'"="'+c.x[1]+'"]':'')+'](around:'+r+','+lat+','+lon+'););out body 100;';
 }
 function alaRelease(key){
   var st=alaState[key]; if(!st||!st.pois) return;
@@ -1208,7 +1208,7 @@ async function alaWork(){
     alaRelease(key); st.lat=u.lat; st.lon=u.lon;
     for(var i=0;i<ALA_CATS.length;i++){
       if(!alaState[key]) break;
-      var c=ALA_CATS[i], radii=[2500,7000,18000], got=0;
+      var c=ALA_CATS[i], radii=[500,1000,1500,2500,5000,10000,18000], got=0;
       alaSay('🔎 '+c.e+' '+c.ar+' … ('+(i+1)+'/'+ALA_CATS.length+') — '+found);
       for(var k=0;k<radii.length&&!got;k++){
         try{ var els=await alaFetch(alaQ(c,u.lat,u.lon,radii[k])); got=alaAdd(key,u,c,els); }
