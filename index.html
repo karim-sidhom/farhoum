@@ -1191,14 +1191,22 @@ function alaSay(t){
   b.textContent=t;
 }
 async function alaFetch(q){
-  /* نفس طلب مصباح علاء الدين، مع انتظار وإعادة المحاولة عندما يردّ Overpass بـ"مشغول" (429/504) */
-  for(var a=0;a<5;a++){
-    var res=await fetch('https://overpass-api.de/api/interpreter',{method:'POST',body:'data='+encodeURIComponent(q)});
-    if(res.status===429||res.status===504||res.status===502){ alaSay('⏳ Overpass مشغول ('+res.status+') — إعادة المحاولة…'); await new Promise(function(r){ setTimeout(r,6000+a*4000); }); continue; }
-    if(!res.ok) throw new Error('HTTP '+res.status);
-    var j=await res.json(); return j.elements||[];
+  /* خوادم Overpass مختلفة عن التي تستعملها الخريطة لتحميل السكك، حتى لا تتزاحم الطلبات */
+  var eps=['https://overpass.kumi.systems/api/interpreter','https://overpass.private.coffee/api/interpreter','https://overpass-api.de/api/interpreter'], err='';
+  for(var round=0;round<2;round++){
+    for(var t=0;t<eps.length;t++){
+      try{
+        var ctl=new AbortController(), tm=setTimeout(function(){ctl.abort();},25000);
+        var res=await fetch(eps[t],{method:'POST',body:'data='+encodeURIComponent(q),signal:ctl.signal});
+        clearTimeout(tm);
+        if(!res.ok){ err='HTTP '+res.status; continue; }
+        var j=await res.json(); return j.elements||[];
+      }catch(e){ err=String(e&&e.message||e); }
+    }
+    alaSay('⏳ Overpass مشغول ('+err+') — إعادة المحاولة…');
+    await new Promise(function(r){ setTimeout(r,6000); });
   }
-  throw new Error('Overpass مشغول (429)');
+  throw new Error(err);
 }
 function alaQMulti(cats,lat,lon,r){
   var parts=cats.map(function(c){ return 'node["'+c.k+'"="'+c.v+'"'+(c.x?'["'+c.x[0]+'"="'+c.x[1]+'"]':'')+'](around:'+r+','+lat+','+lon+');'; });
