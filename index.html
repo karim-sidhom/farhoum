@@ -1155,40 +1155,29 @@ var ALA_CATS=[
 ];
 var ALA_R=3000, ALA_MOVE=150;
 var alaLayer=L.layerGroup().addTo(map), alaState={}, alaQueue=[], alaBusy=false, alaPoi={};
-function alaQuery(lat,lon){
-  var parts=ALA_CATS.map(function(c){ return 'nwr["'+c.k+'"="'+c.v+'"'+(c.x?'["'+c.x[0]+'"="'+c.x[1]+'"]':'')+'](around:'+ALA_R+','+lat+','+lon+');'; });
-  return '[out:json][timeout:25];('+parts.join('')+');out tags center;';
-}
-function alaCatOf(t){
-  for(var i=0;i<ALA_CATS.length;i++){ var c=ALA_CATS[i]; if(t[c.k]===c.v && (!c.x||t[c.x[0]]===c.x[1])) return c; }
-  return null;
+function alaQ(c,lat,lon,r){
+  return '[out:json][timeout:25];(node["'+c.k+'"="'+c.v+'"'+(c.x?'["'+c.x[0]+'"="'+c.x[1]+'"]':'')+'](around:'+r+','+lat+','+lon+'););out body 40;';
 }
 function alaRelease(key){
   var st=alaState[key]; if(!st||!st.pois) return;
   st.pois.forEach(function(pk){ var o=alaPoi[pk]; if(!o) return; delete o.users[key]; if(!Object.keys(o.users).length){ alaLayer.removeLayer(o.m); delete alaPoi[pk]; } });
   st.pois=[];
 }
-function alaShow(key,u,els){
-  var best={}, st=alaState[key];
+function alaAdd(key,u,c,els){
+  var best=null, st=alaState[key]; if(!st) return 0;
   els.forEach(function(el){
     var la=el.lat!=null?el.lat:(el.center&&el.center.lat), ln=el.lon!=null?el.lon:(el.center&&el.center.lon);
-    if(la==null||!el.tags) return;
-    var c=alaCatOf(el.tags); if(!c) return;
+    if(la==null) return;
     var d=QT.haversine([u.lat,u.lon],[la,ln]);
-    if(!best[c.ar]||d<best[c.ar].d) best[c.ar]={c:c,d:d,la:la,ln:ln,id:el.type+el.id,name:el.tags.name||c.ar};
+    if(!best||d<best.d) best={d:d,la:la,ln:ln,id:el.type+el.id,name:(el.tags&&el.tags.name)||c.ar};
   });
-  alaRelease(key);
-  var keep=[];
-  Object.keys(best).forEach(function(k){
-    var b=best[k], pk=b.id+'|'+b.c.ar, o=alaPoi[pk];
-    var tip=b.c.e+' '+esc(b.name)+'<br>'+esc(b.c.ar)+' · '+fmtD(b.d);
-    if(!o){
-      var m=L.marker([b.la,b.ln],{icon:L.divIcon({className:'ala-poi',html:b.c.e,iconSize:[24,24],iconAnchor:[12,12]}),zIndexOffset:200}).addTo(alaLayer).bindPopup(tip);
-      o=alaPoi[pk]={m:m,users:{}};
-    } else o.m.setPopupContent(tip);
-    o.users[key]=1; keep.push(pk);
-  });
-  st.pois=keep;
+  if(!best) return 0;
+  var pk=best.id+'|'+c.ar, o=alaPoi[pk], tip=c.e+' '+esc(best.name)+'<br>'+esc(c.ar)+' · '+fmtD(best.d);
+  if(!o){
+    var m=L.marker([best.la,best.ln],{icon:L.divIcon({className:'ala-poi',html:c.e,iconSize:[24,24],iconAnchor:[12,12]}),zIndexOffset:200}).addTo(alaLayer).bindPopup(tip);
+    o=alaPoi[pk]={m:m,users:{}};
+  } else o.m.setPopupContent(tip);
+  o.users[key]=1; st.pois.push(pk); return 1;
 }
 var ALA_EP=['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter','https://overpass.private.coffee/api/interpreter'], alaEp=0;
 function alaSay(t){
@@ -1197,27 +1186,39 @@ function alaSay(t){
   if(!b){ b=document.createElement('div'); b.id='alabadge'; b.style.cssText='position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:99999;background:#000c;color:#fff;font:700 13px system-ui,sans-serif;padding:7px 14px;border-radius:18px;direction:rtl;max-width:92vw;text-align:center;pointer-events:none'; document.body.appendChild(b); }
   b.textContent=t;
 }
+async function alaFetch(q){
+  var err='';
+  for(var t=0;t<ALA_EP.length;t++){
+    var ep=ALA_EP[(alaEp+t)%ALA_EP.length];
+    try{
+      var ctl=new AbortController(), tm=setTimeout(function(){ctl.abort();},12000);
+      var r=await fetch(ep,{method:'POST',body:'data='+encodeURIComponent(q),signal:ctl.signal});
+      clearTimeout(tm);
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      var j=await r.json(); alaEp=(alaEp+t)%ALA_EP.length; return j.elements||[];
+    }catch(e){ err=String(e&&e.message||e); }
+  }
+  throw new Error(err);
+}
 async function alaWork(){
   if(alaBusy) return; alaBusy=true;
   while(alaQueue.length){
     var key=alaQueue.shift(), st=alaState[key]; if(!st||!st.u) continue;
-    st.queued=false; var u=st.u, wait=1500, ok=false, err='';
-    alaSay('🔎 علاء الدين… ('+(alaQueue.length+1)+')');
-    for(var t=0;t<ALA_EP.length&&!ok;t++){
-      var ep=ALA_EP[(alaEp+t)%ALA_EP.length];
-      try{
-        var ctl=new AbortController(), tm=setTimeout(function(){ctl.abort();},30000);
-        var r=await fetch(ep,{method:'POST',body:'data='+encodeURIComponent(alaQuery(u.lat,u.lon)),signal:ctl.signal});
-        clearTimeout(tm);
-        if(!r.ok) throw new Error('HTTP '+r.status);
-        var j=await r.json();
-        if(alaState[key]){ st.lat=u.lat; st.lon=u.lon; alaShow(key,u,j.elements||[]); st.n=(j.elements||[]).length; }
-        alaEp=(alaEp+t)%ALA_EP.length; ok=true;
-      }catch(e){ err=String(e&&e.message||e); }
+    st.queued=false; var u=st.u, found=0, fails=0, lastErr='';
+    alaRelease(key); st.lat=u.lat; st.lon=u.lon;
+    for(var i=0;i<ALA_CATS.length;i++){
+      if(!alaState[key]) break;
+      var c=ALA_CATS[i], radii=[2500,7000,18000], got=0;
+      alaSay('🔎 '+c.e+' '+c.ar+' … ('+(i+1)+'/'+ALA_CATS.length+') — '+found);
+      for(var k=0;k<radii.length&&!got;k++){
+        try{ var els=await alaFetch(alaQ(c,u.lat,u.lon,radii[k])); got=alaAdd(key,u,c,els); }
+        catch(e){ fails++; lastErr=String(e&&e.message||e); break; }
+      }
+      found+=got;
+      await new Promise(function(res){ setTimeout(res,300); });
     }
-    if(ok) alaSay('✅ علاء الدين: '+Object.keys(alaPoi).length+' / '+((alaState[key]&&alaState[key].n)||0));
-    else { st.lat=null; wait=10000; alaSay('⚠️ علاء الدين: '+err); }
-    await new Promise(function(res){ setTimeout(res,wait); });
+    if(fails>=ALA_CATS.length){ st.lat=null; alaSay('⚠️ علاء الدين: '+lastErr); await new Promise(function(res){ setTimeout(res,10000); }); }
+    else alaSay('✅ علاء الدين: '+found+' / '+ALA_CATS.length+(fails?' ('+fails+' ⚠️ '+lastErr+')':''));
   }
   alaBusy=false;
 }
