@@ -1191,20 +1191,25 @@ function alaSay(t){
   b.textContent=t;
 }
 async function alaFetch(q){
-  /* خوادم Overpass مختلفة عن التي تستعملها الخريطة لتحميل السكك، حتى لا تتزاحم الطلبات */
-  var eps=['https://overpass.kumi.systems/api/interpreter','https://overpass.private.coffee/api/interpreter','https://overpass-api.de/api/interpreter'], err='';
-  for(var round=0;round<2;round++){
-    for(var t=0;t<eps.length;t++){
-      try{
-        var ctl=new AbortController(), tm=setTimeout(function(){ctl.abort();},25000);
-        var res=await fetch(eps[t],{method:'POST',body:'data='+encodeURIComponent(q),signal:ctl.signal});
-        clearTimeout(tm);
-        if(!res.ok){ err='HTTP '+res.status; continue; }
-        var j=await res.json(); return j.elements||[];
-      }catch(e){ err=String(e&&e.message||e); }
+  /* نرسل الطلب لثلاثة خوادم Overpass في نفس الوقت ونأخذ أول ردّ ناجح */
+  var eps=['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter','https://overpass.private.coffee/api/interpreter'], err='';
+  for(var round=0;round<3;round++){
+    var ctls=[], pend=eps.map(function(ep){
+      var ctl=new AbortController(); ctls.push(ctl);
+      var tm=setTimeout(function(){ ctl.abort(); },30000);
+      return fetch(ep,{method:'POST',body:'data='+encodeURIComponent(q),signal:ctl.signal}).then(function(res){
+        clearTimeout(tm); if(!res.ok) throw new Error('HTTP '+res.status); return res.json();
+      }).then(function(j){ if(!j||!j.elements) throw new Error('bad'); return j.elements; },function(e){ clearTimeout(tm); throw e; });
+    });
+    try{
+      var els=await new Promise(function(ok,ko){ var n=0; pend.forEach(function(pr){ pr.then(ok,function(e){ err=String(e&&e.message||e); if(++n===pend.length) ko(new Error(err)); }); }); });
+      ctls.forEach(function(c){ try{c.abort();}catch(e){} });
+      return els;
+    }catch(e){
+      err=String(e&&e.message||e);
+      alaSay('⏳ Overpass مشغول ('+err+') — إعادة المحاولة…');
+      await new Promise(function(r){ setTimeout(r,5000); });
     }
-    alaSay('⏳ Overpass مشغول ('+err+') — إعادة المحاولة…');
-    await new Promise(function(r){ setTimeout(r,6000); });
   }
   throw new Error(err);
 }
