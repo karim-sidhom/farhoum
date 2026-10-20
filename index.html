@@ -1191,7 +1191,12 @@ function alaShow(key,u,els){
   st.pois=keep;
 }
 var ALA_EP=['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter','https://overpass.private.coffee/api/interpreter'], alaEp=0;
-function alaSay(t){ var e=document.getElementById('alast'); if(e) e.textContent=t; }
+function alaSay(t){
+  var e=document.getElementById('alast'); if(e) e.textContent=t;
+  var b=document.getElementById('alabadge');
+  if(!b){ b=document.createElement('div'); b.id='alabadge'; b.style.cssText='position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:99999;background:#000c;color:#fff;font:700 13px system-ui,sans-serif;padding:7px 14px;border-radius:18px;direction:rtl;max-width:92vw;text-align:center;pointer-events:none'; document.body.appendChild(b); }
+  b.textContent=t;
+}
 async function alaWork(){
   if(alaBusy) return; alaBusy=true;
   while(alaQueue.length){
@@ -1206,11 +1211,11 @@ async function alaWork(){
         clearTimeout(tm);
         if(!r.ok) throw new Error('HTTP '+r.status);
         var j=await r.json();
-        if(alaState[key]){ st.lat=u.lat; st.lon=u.lon; alaShow(key,u,j.elements||[]); }
+        if(alaState[key]){ st.lat=u.lat; st.lon=u.lon; alaShow(key,u,j.elements||[]); st.n=(j.elements||[]).length; }
         alaEp=(alaEp+t)%ALA_EP.length; ok=true;
       }catch(e){ err=String(e&&e.message||e); }
     }
-    if(ok) alaSay('✅ علاء الدين: '+Object.keys(alaPoi).length);
+    if(ok) alaSay('✅ علاء الدين: '+Object.keys(alaPoi).length+' / '+((alaState[key]&&alaState[key].n)||0));
     else { st.lat=null; wait=10000; alaSay('⚠️ علاء الدين: '+err); }
     await new Promise(function(res){ setTimeout(res,wait); });
   }
@@ -1218,8 +1223,11 @@ async function alaWork(){
 }
 function aladdinSync(greens){
   var alive={}, b=map.getBounds();
+  var ctr=map.getCenter();
+  greens=greens.slice().sort(function(x,y){ return QT.haversine([x.u.lat,x.u.lon],[ctr.lat,ctr.lng])-QT.haversine([y.u.lat,y.u.lon],[ctr.lat,ctr.lng]); });
+  var shown=0;
   greens.forEach(function(g){
-    var key=g.key, u=g.u; if(!b.contains([u.lat,u.lon])) return;
+    var key=g.key, u=g.u; if(!b.contains([u.lat,u.lon])||shown>=25) return; shown++;
     alive[key]=1;
     var st=alaState[key]||(alaState[key]={pois:[],lat:null,lon:null,queued:false});
     st.u=u;
@@ -1227,7 +1235,7 @@ function aladdinSync(greens){
     if(moved&&!st.queued){ st.queued=true; alaQueue.push(key); }
   });
   Object.keys(alaState).forEach(function(k){ if(!alive[k]){ alaRelease(k); delete alaState[k]; } });
-  if(!alaBusy){ var n=Object.keys(alive).length; if(!n) alaSay('🟢 0 / '+greens.length+(greens.length?' (خارج الشاشة)':'')); }
+  if(!alaBusy){ var n=Object.keys(alive).length; if(!n) alaSay('🟢 '+greens.length+(greens.length?' — قرّب الخريطة من دائرة خضراء':' (لا دائرة خضراء)')); }
   alaWork();
 }
 /* حركة سلسة مستمرة لموقع المستخدم (بدل القفز عند كل تحديث) */
