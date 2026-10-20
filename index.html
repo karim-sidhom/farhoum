@@ -1212,12 +1212,41 @@ function alaQMulti(cats,lat,lon,r){
   var parts=cats.map(function(c){ return 'node["'+c.k+'"="'+c.v+'"'+(c.x?'["'+c.x[0]+'"="'+c.x[1]+'"]':'')+'](around:'+r+','+lat+','+lon+');'; });
   return '[out:json][timeout:25];('+parts.join('')+');out body;';
 }
+var ALA_LAMP='https://alaiddine.kieda.online', alaReady=false, alaAsk_={}, alaSeq=0;
+(function(){
+  var f=document.createElement('iframe'); f.id='alaLamp'; f.src=ALA_LAMP+'/?bridge=1'; f.setAttribute('allow','geolocation');
+  f.style.cssText='position:fixed;left:-9999px;top:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none';
+  document.body.appendChild(f);
+  window.addEventListener('message',function(ev){
+    if(ev.origin!==ALA_LAMP) return; var d=ev.data; if(!d) return;
+    if(d.type==='ala-ready') alaReady=true;
+    if(d.type==='ala-res'&&alaAsk_[d.id]){ alaAsk_[d.id](d.poi); delete alaAsk_[d.id]; }
+  });
+})();
+function alaAskLamp(c,u){
+  return new Promise(function(res){
+    var id=++alaSeq, fr=document.getElementById('alaLamp');
+    var tm=setTimeout(function(){ delete alaAsk_[id]; res(undefined); },90000);
+    alaAsk_[id]=function(p){ clearTimeout(tm); res(p); };
+    try{ fr.contentWindow.postMessage({type:'ala-find',id:id,cat:c.ar,lat:u.lat,lng:u.lon},ALA_LAMP); }catch(e){ clearTimeout(tm); delete alaAsk_[id]; res(undefined); }
+  });
+}
 async function alaWork(){
   if(alaBusy) return; alaBusy=true;
   while(alaQueue.length){
     var key=alaQueue.shift(), st=alaState[key]; if(!st||!st.u) continue;
     st.queued=false; var u=st.u, found=0, lastErr='', missing=ALA_CATS.slice();
     alaRelease(key); st.lat=u.lat; st.lon=u.lon;
+    if(alaReady){
+      for(var ci=0;ci<ALA_CATS.length&&alaState[key];ci++){
+        var cc=ALA_CATS[ci]; alaSay('🔎 '+cc.e+' '+cc.ar+' … ('+(ci+1)+'/'+ALA_CATS.length+') — '+found);
+        var poi=await alaAskLamp(cc,u);
+        if(poi===undefined){ lastErr='فرحوم لا يردّ'; break; }
+        if(poi&&alaAdd(key,u,cc,[{type:'n',id:poi.lat+','+poi.lng,lat:poi.lat,lon:poi.lng,tags:{name:poi.name}}])) found++;
+        await new Promise(function(res){ setTimeout(res,1200); });
+      }
+      if(!lastErr) missing=[];
+    }
     var stages=[1500,5000,18000];
     for(var k=0;k<stages.length&&missing.length&&alaState[key];k++){
       alaSay('🔎 علاء الدين… '+(stages[k]/1000)+' كم — '+found+' / '+ALA_CATS.length);
