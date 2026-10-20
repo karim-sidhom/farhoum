@@ -1190,13 +1190,16 @@ async function alaFetch(q){
   var err='';
   for(var t=0;t<ALA_EP.length;t++){
     var ep=ALA_EP[(alaEp+t)%ALA_EP.length];
-    try{
-      var ctl=new AbortController(), tm=setTimeout(function(){ctl.abort();},12000);
-      var r=await fetch(ep,{method:'POST',body:'data='+encodeURIComponent(q),signal:ctl.signal});
-      clearTimeout(tm);
-      if(!r.ok) throw new Error('HTTP '+r.status);
-      var j=await r.json(); alaEp=(alaEp+t)%ALA_EP.length; return j.elements||[];
-    }catch(e){ err=String(e&&e.message||e); }
+    for(var a=0;a<3;a++){
+      try{
+        var ctl=new AbortController(), tm=setTimeout(function(){ctl.abort();},45000);
+        var r=await fetch(ep,{method:'POST',body:'data='+encodeURIComponent(q),signal:ctl.signal});
+        clearTimeout(tm);
+        if(r.status===429||r.status===504||r.status===502){ err='HTTP '+r.status; await new Promise(function(res){ setTimeout(res,4000); }); continue; }
+        if(!r.ok) throw new Error('HTTP '+r.status);
+        var j=await r.json(); alaEp=(alaEp+t)%ALA_EP.length; return j.elements||[];
+      }catch(e){ err=String(e&&e.message||e); if(err.indexOf('HTTP')!==0) break; }
+    }
   }
   throw new Error(err);
 }
@@ -1212,7 +1215,7 @@ async function alaWork(){
       alaSay('🔎 '+c.e+' '+c.ar+' … ('+(i+1)+'/'+ALA_CATS.length+') — '+found);
       for(var k=0;k<radii.length&&!got;k++){
         try{ var els=await alaFetch(alaQ(c,u.lat,u.lon,radii[k])); got=alaAdd(key,u,c,els); }
-        catch(e){ fails++; lastErr=String(e&&e.message||e); break; }
+        catch(e){ fails++; lastErr=String(e&&e.message||e); alaSay('⚠️ '+c.ar+': '+lastErr); break; }
       }
       found+=got;
       await new Promise(function(res){ setTimeout(res,300); });
