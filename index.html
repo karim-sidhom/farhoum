@@ -994,7 +994,8 @@ return {
   liveOnly:function(){ var out=[]; liveOnlyEntries().forEach(function(lt){ var p=liveOnlyTrainPosition(lt); if(p) out.push({lt:lt,p:p}); }); return out; },
   icon:trainIconSvg,
   stationDist:function(name,lat,lon){ var c=resolveStationCoord(name); return c?haversine([lat,lon],c):null; },
-  liveUrl:SNCFT_LIVE_URL
+  liveUrl:SNCFT_LIVE_URL,
+  stations:function(){ return STATIONS; }, trains:function(){ return trains; }, parseStops:parseStops, minutesOf:minutesOf, minsToHHMM:minsToHHMM
 };
 })();
 var map=L.map('map',{zoomControl:true}).setView([36.0,9.8],7);
@@ -2519,6 +2520,173 @@ if('serviceWorker' in navigator){
     navigator.serviceWorker.register(URL.createObjectURL(new Blob([swCode],{type:'application/javascript'}))).catch(function(){});
   }catch(e){}
 }
+/* ===== 🧭 برنامجي: نص حرّ (عربي/فرنسي) → المحطات + الساعات → أقرب قطارات من جدول Qitari → رسم المسار على السكة مع الأسهم والتوقيت ===== */
+(function(){
+  var prgLayer=L.layerGroup().addTo(map), COLORS=['#ff3b30','#0a84ff','#30d158','#ff9f0a','#bf5af2','#00c7be'];
+  var AR_ALIAS={'تونس':'tunis','سوسه':'sousse','صفاقس':'sfax','المنستير':'monastir','المهديه':'mahdia','قابس':'gabes','قفصه':'gafsa','توزر':'tozeur','نابل':'nabeul','بنزرت':'bizerte','الكاف':'le kef','جندوبه':'jendouba','الجم':'el jem','المتلوي':'metlaoui','الحمامات':'hammamet','منوبه':'manouba','باردو':'le bardo','المكنين':'moknine','طبلبه':'teboulba','بقالطه':'bekalta','باجه':'beja','مطر':'mateur','غار الدماء':'ghardimaou','حمام الليف':'hammam lif','برج السدريه':'borj cedria','بوفيشه':'bouficha','قلعه الكبيره':'kalaa kebira','قلعه الصغيره':'kalaa seghira','الزهراء':'ezzahra','قصر هلال':'ksar hellal','القلعه الكبيره':'kalaa kebira','القلعه الصغيره':'kalaa seghira','المحمديه':'mohamedia','رادس':'rades'};
+  function nrm(s){
+    s=String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ًͯ-ٰٟـ]/g,'');
+    s=s.replace(/[٠-٩]/g,function(d){return String('٠١٢٣٤٥٦٧٨٩'.indexOf(d));}).replace(/[أإآٱ]/g,'ا').replace(/ة/g,'ه').replace(/ى/g,'ي');
+    return s;
+  }
+  function words(s){ return nrm(s).replace(/[^a-z0-9؀-ۿ]+/g,' ').trim(); }
+  var known=null, pre=null, exact=null;
+  function buildKnown(){
+    if(known) return; known={}; pre={}; exact={};
+    var names={}; Object.keys(QT.stations()).forEach(function(k){ names[k]=1; });
+    QT.trains().forEach(function(t){ QT.parseStops(t.stopsText).forEach(function(s){ names[s.name]=1; }); });
+    Object.keys(names).forEach(function(n){
+      var w=words(n).split(' '); if(!w[0]) return; exact[w.join(' ')]=n;
+      for(var k=1;k<=w.length;k++){ var p=w.slice(0,k).join(' '); (pre[p]=pre[p]||[]).push(n); }
+    });
+  }
+  function nowHHMM(){ var d=new Date(); return d.getHours()*60+d.getMinutes(); }
+  /* 1) استخراج التوقيتات ثم المحطات بترتيب ورودها */
+  function parse(text){
+    buildKnown();
+    var t=nrm(text), times=[];
+    function put(h,m,pm){ h=+h; m=+(m||0); if(pm&&h<12) h+=12; if(h>23||m>59) return ' '; times.push(h*60+m); return ' §'+(times.length-1)+'§ '; }
+    t=t.replace(/(\d{1,2})\s*[:h]\s*(\d{2})\s*(مساء|pm|soir)?/g,function(a,h,m,p){return put(h,m,p);});
+    t=t.replace(/(?:الساعه|ساعه)\s*(\d{1,2})(?:\s*(?:و|:)\s*(\d{2}))?\s*(مساء)?/g,function(a,h,m,p){return put(h,m,p);});
+    t=t.replace(/(\d{1,2})\s*h\b\s*(soir)?/g,function(a,h,p){return put(h,0,p);});
+    var ws=t.replace(/[^a-z0-9؀-ۿ§]+/g,' ').trim().split(' ').filter(Boolean), items=[], i=0;
+    function variants(w){ var v=[w]; ['لل','ال','و','ب','ل','ف','ك'].forEach(function(p){ if(w.indexOf(p)===0&&w.length-p.length>=2) v.push(w.slice(p.length)); }); if(w.indexOf('ال')===0){} return v; }
+    while(i<ws.length){
+      var w=ws[i], m=/^§(\d+)§$/.exec(w);
+      if(m){ items.push({type:'time',v:times[+m[1]],pos:i}); i++; continue; }
+      var hit=null;
+      for(var n=Math.min(4,ws.length-i);n>=1&&!hit;n--){
+        var seq=ws.slice(i,i+n);
+        if(seq.some(function(x){return /^§/.test(x);})) continue;
+        var cands=[seq.join(' ')];
+        if(n===1){ variants(seq[0]).forEach(function(v){ if(cands.indexOf(v)<0) cands.push(v); }); }
+        else { var vv=variants(seq[0]); vv.forEach(function(v){ var c=[v].concat(seq.slice(1)).join(' '); if(cands.indexOf(c)<0) cands.push(c); }); }
+        for(var c=0;c<cands.length&&!hit;c++){
+          var g=cands[c], lat=AR_ALIAS[g]||g;
+          if(AR_ALIAS[g]&&!pre[lat]) continue;
+          if(exact[lat]||(pre[lat]&&lat.length>=4)) hit={key:lat,len:n,label:(exact[lat]||pre[lat][0])};
+        }
+      }
+      if(hit){ items.push({type:'st',key:hit.key,label:hit.label,pos:i}); i+=hit.len; } else i++;
+    }
+    /* ربط كل توقيت بأقرب محطة (عند التساوي: السابقة) */
+    var sts=items.filter(function(x){return x.type==='st';});
+    items.filter(function(x){return x.type==='time';}).forEach(function(tm){
+      var best=null,bd=1e9; sts.forEach(function(s){ var d=Math.abs(s.pos-tm.pos)+(s.pos>tm.pos?0.5:0); if(d<bd&&s.time==null){bd=d;best=s;} });
+      if(best) best.time=tm.v;
+    });
+    var out=[]; sts.forEach(function(s){ if(!out.length||out[out.length-1].key!==s.key) out.push(s); });
+    return out;
+  }
+  /* 2) البحث عن القطارات */
+  function matchStop(stopName,key){ var n=words(stopName); return n===key||n.indexOf(key+' ')===0; }
+  function idxOf(stops,key,from){ for(var i=from||0;i<stops.length;i++) if(matchStop(stops[i].name,key)) return i; return -1; }
+  var TR=null;
+  function trainsParsed(){ if(!TR) TR=QT.trains().map(function(t){ var st=QT.parseStops(t.stopsText).filter(function(s){return s.time;}); st.forEach(function(s){ s.m=QT.minutesOf(s.time); }); return {t:t,stops:st}; }); return TR; }
+  function bestDirect(kA,kB,after){
+    var best=null;
+    trainsParsed().forEach(function(tr){
+      var a=idxOf(tr.stops,kA,0); if(a<0) return; var b=idxOf(tr.stops,kB,a+1); if(b<0) return;
+      var dep=tr.stops[a].m; if(dep<after) return;
+      if(!best||dep<best.dep||(dep===best.dep&&tr.stops[b].m<best.arr)) best={tr:tr,a:a,b:b,dep:dep,arr:tr.stops[b].m};
+    });
+    return best;
+  }
+  function planHop(kA,kB,after){
+    var d=bestDirect(kA,kB,after); if(d) return [d];
+    var bestPair=null;
+    trainsParsed().forEach(function(tr){
+      var a=idxOf(tr.stops,kA,0); if(a<0||tr.stops[a].m<after) return;
+      for(var x=a+1;x<tr.stops.length;x++){
+        var kx=words(tr.stops[x].name), l2=bestDirect(kx,kB,tr.stops[x].m);
+        if(l2){ var l1={tr:tr,a:a,b:x,dep:tr.stops[a].m,arr:tr.stops[x].m}; if(!bestPair||l2.arr<bestPair[1].arr) bestPair=[l1,l2]; }
+      }
+    });
+    return bestPair;
+  }
+  /* 3) رسم المسار فوق السكة */
+  function lineSets(){ var a=[]; (QT.RAIL_LINES||[]).forEach(function(l){a.push(l.pts);}); (QT.OFFICIAL||[]).forEach(function(l){a.push(l.coords);}); return a; }
+  function proj(pt,pts){
+    var best={d:1e12,i:0,t:0};
+    for(var i=0;i<pts.length-1;i++){
+      var A=pts[i],B=pts[i+1],dx=B[1]-A[1],dy=B[0]-A[0],l2=dx*dx+dy*dy,t=l2?((pt[1]-A[1])*dx+(pt[0]-A[0])*dy)/l2:0; t=Math.max(0,Math.min(1,t));
+      var q=[A[0]+dy*t,A[1]+dx*t], d=QT.haversine(pt,q); if(d<best.d) best={d:d,i:i,t:t,q:q};
+    }
+    return best;
+  }
+  function plen(a){ var s=0; for(var i=0;i<a.length-1;i++) s+=QT.haversine(a[i],a[i+1]); return s; }
+  function snap(A,B){
+    var straight=QT.haversine(A,B), best=null;
+    lineSets().forEach(function(pts){
+      if(!pts||pts.length<2) return;
+      var pa=proj(A,pts); if(pa.d>500) return; var pb=proj(B,pts); if(pb.d>500) return;
+      var path;
+      if(pa.i<pb.i||(pa.i===pb.i&&pa.t<=pb.t)){ path=[pa.q].concat(pts.slice(pa.i+1,pb.i+1),[pb.q]); }
+      else { path=[pa.q].concat(pts.slice(pb.i+1,pa.i+1).reverse(),[pb.q]); }
+      var L_=plen(path); if(L_>straight*1.6+600) return;
+      var sc=pa.d+pb.d; if(!best||sc<best.sc) best={sc:sc,path:[A].concat(path,[B])};
+    });
+    return best?best.path:[A,B];
+  }
+  function arrow(p,q,color){
+    var b=(function(a,c){var r=Math.PI/180,y=Math.sin((c[1]-a[1])*r)*Math.cos(c[0]*r),x=Math.cos(a[0]*r)*Math.sin(c[0]*r)-Math.sin(a[0]*r)*Math.cos(c[0]*r)*Math.cos((c[1]-a[1])*r);return (Math.atan2(y,x)*180/Math.PI+360)%360;})(p,q);
+    return L.marker([(p[0]+q[0])/2,(p[1]+q[1])/2],{interactive:false,keyboard:false,icon:L.divIcon({className:'',html:'<div style="transform:rotate('+(b-90)+'deg);color:'+color+';font-size:20px;line-height:20px;text-shadow:0 0 3px #fff,0 0 3px #fff;font-weight:900">➤</div>',iconSize:[20,20],iconAnchor:[10,10]})});
+  }
+  function hh(m){ return QT.minsToHHMM(m); }
+  function draw(legs){
+    prgLayer.clearLayers(); var all=[], seen={};
+    legs.forEach(function(lg,li){
+      var col=COLORS[li%COLORS.length], tr=lg.tr, pts=[];
+      for(var k=lg.a;k<=lg.b;k++){
+        var s=tr.stops[k]; if(s.lat==null) continue;
+        var P=[s.lat,s.lon]; all.push(P);
+        if(pts.length){ var sub=snap(pts[pts.length-1].P,P); L.polyline(sub,{color:col,weight:5,opacity:.9}).addTo(prgLayer);
+          var mid=Math.floor(sub.length/2); if(sub.length>=2){ var a1=sub[Math.max(0,mid-1)], a2=sub[Math.min(sub.length-1,mid)]; if(a1[0]!==a2[0]||a1[1]!==a2[1]) arrow(a1,a2,col).addTo(prgLayer); } }
+        pts.push({P:P});
+        var key=s.name+'|'+s.time, first=(k===lg.a), last=(k===lg.b), keyst=first||last;
+        if(keyst||true){
+          var lbl=(first?'🟢 ':last?'🏁 ':'')+esc(s.name)+' <b>'+s.time+'</b>';
+          L.circleMarker(P,{radius:keyst?8:4,color:'#fff',weight:2,fillColor:col,fillOpacity:1}).addTo(prgLayer)
+            .bindTooltip(lbl,{permanent:keyst,direction:first?'top':'bottom',className:'prg-tip',offset:[0,first?-6:6]});
+        }
+      }
+    });
+    if(all.length) map.fitBounds(L.latLngBounds(all),{padding:[50,50]});
+  }
+  function run(){
+    var txt=document.getElementById('prgTxt').value, out=document.getElementById('prgOut');
+    try{ localStorage.setItem('prg_txt',txt); }catch(e){}
+    var pts=parse(txt);
+    if(pts.length<2){ out.innerHTML='<div class="prgE">لم أجد محطتين على الأقل في النص. اكتب مثلاً: «تونس 8h سوسة ثم المهدية 14:30».</div>'; prgLayer.clearLayers(); return; }
+    var cur=pts[0].time!=null?pts[0].time:nowHHMM(), legs=[], html='', ok=true;
+    html+='<div class="prgR"><b>🧭 '+pts.map(function(p){return esc(p.label);}).join(' ➤ ')+'</b></div>';
+    for(var i=0;i<pts.length-1;i++){
+      var A=pts[i],B=pts[i+1], after=Math.max(cur,A.time!=null?A.time:0), wrap=false;
+      var plan=planHop(A.key,B.key,after);
+      if(!plan){ plan=planHop(A.key,B.key,0); wrap=!!plan; }
+      if(!plan){ html+='<div class="prgE">❌ '+esc(A.label)+' ➤ '+esc(B.label)+' : لا يوجد قطار في الجدول (حتى بتغيير واحد).</div>'; ok=false; continue; }
+      plan.forEach(function(lg,j){
+        legs.push(lg);
+        html+='<div class="prgR" style="border-color:'+COLORS[(legs.length-1)%COLORS.length]+'">🚆 <b>'+esc(lg.tr.t.name)+'</b><br>'+esc(lg.tr.stops[lg.a].name)+' <b>'+hh(lg.dep)+'</b> ➤ '+esc(lg.tr.stops[lg.b].name)+' <b>'+hh(lg.arr)+'</b>'+(wrap&&j===0?' <small>(غداً — لا قطار بعد الساعة المطلوبة)</small>':'')+(plan.length>1&&j===0?' <small>🔁 تغيير القطار</small>':'')+'</div>';
+      });
+      cur=plan[plan.length-1].arr;
+    }
+    out.innerHTML=html; draw(legs);
+  }
+  var css=document.createElement('style');
+  css.textContent='#prgPanel{position:absolute;top:58px;right:10px;z-index:1000;width:min(380px,calc(100vw - 20px));max-height:72vh;overflow:auto;background:#0d1a6eF2;color:#fff;border:1px solid #d4af37;border-radius:12px;padding:10px;direction:rtl;font-size:13px;display:none}#prgPanel textarea{width:100%;box-sizing:border-box;min-height:70px;border-radius:8px;border:1px solid #d4af37;background:#fff;color:#111;padding:6px;font:inherit}#prgPanel button{margin-top:6px;margin-inline-end:6px;padding:6px 12px;border-radius:8px;border:1px solid #d4af37;background:#d4af37;color:#0d1a6e;font-weight:800;cursor:pointer}.prgR{margin-top:8px;padding:6px 8px;border-inline-start:5px solid #d4af37;background:#ffffff14;border-radius:6px;line-height:1.7}.prgE{margin-top:8px;padding:6px 8px;background:#ff3b3040;border-radius:6px}.prg-tip{font-size:11px;font-weight:700;white-space:nowrap}';
+  document.head.appendChild(css);
+  var panel=document.createElement('div'); panel.id='prgPanel';
+  panel.innerHTML='<div><b>🧭 برنامجي</b> — اكتب برنامجك بجملة حرّة (عربي / français) وسأرسم المسار بالتوقيت والأسهم</div><textarea id="prgTxt" placeholder="مثال: غدوة نخرج من تونس 8h لسوسة، وبعدها المهدية 14:30&#10;ou : Tunis 8h Sousse puis Mahdia 14h30"></textarea><button id="prgGo">🗺️ ارسم</button><button id="prgClr" style="background:transparent;color:#fff">مسح</button><div id="prgOut"></div>';
+  document.body.appendChild(panel);
+  var bar=document.getElementById('bar'), btn=document.createElement('button'); btn.id='prgBtn'; btn.textContent='🧭'; btn.title='برنامجي';
+  var satB=document.getElementById('sat'); if(satB&&satB.parentNode) satB.parentNode.insertBefore(btn,satB.nextSibling); else document.body.appendChild(btn);
+  btn.onclick=function(){ panel.style.display=panel.style.display==='block'?'none':'block'; };
+  document.getElementById('prgGo').onclick=run;
+  document.getElementById('prgClr').onclick=function(){ document.getElementById('prgTxt').value=''; document.getElementById('prgOut').innerHTML=''; prgLayer.clearLayers(); try{localStorage.removeItem('prg_txt');}catch(e){} };
+  try{ var sv=localStorage.getItem('prg_txt'); if(sv) document.getElementById('prgTxt').value=sv; }catch(e){}
+  window.__prg={parse:parse,run:run,planHop:planHop};
+})();
 </script>
 </body>
 </html>
