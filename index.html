@@ -1214,7 +1214,7 @@ async function alaFetch(q){
   throw new Error(err);
 }
 function alaQMulti(cats,lat,lon,r){
-  var parts=cats.map(function(c){ return 'node["'+c.k+'"="'+c.v+'"'+(c.x?'["'+c.x[0]+'"="'+c.x[1]+'"]':'')+'](around:'+r+','+lat+','+lon+');'; });
+  var parts=cats.map(function(c){ return 'node["'+c.k+'"="'+c.v+'"]'+(c.x?'["'+c.x[0]+'"="'+c.x[1]+'"]':'')+'(around:'+r+','+lat+','+lon+');'; });
   return '[out:json][timeout:25];('+parts.join('')+');out body;';
 }
 var ALA_LAMP='https://alaiddine.kieda.online', alaReady=false, alaAsk_={}, alaSeq=0;
@@ -1236,13 +1236,39 @@ function alaAskLamp(c,u){
     try{ fr.contentWindow.postMessage({type:'ala-find',id:id,cat:c.ar,lat:u.lat,lng:u.lon},ALA_LAMP); }catch(e){ clearTimeout(tm); delete alaAsk_[id]; res(undefined); }
   });
 }
+/* Worker Cloudflare: une seule requête pour les 15 catégories (remplace la boucle lente; l'ancien chemin reste en secours) */
+var ALA_WORKER=''; /* adresse du worker Aladdin (vide = désactivé : Overpass a répondu 521 au worker) */
+var ALA_USE_LAMP=false; /* true = ancienne boucle iframe Farhoum catégorie par catégorie */
+async function alaFetchWorker(u){
+  var ctl=new AbortController(), tm=setTimeout(function(){ ctl.abort(); },35000);
+  try{
+    var res=await fetch(ALA_WORKER+'/?lat='+encodeURIComponent(u.lat)+'&lon='+encodeURIComponent(u.lon),{signal:ctl.signal});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    var j=await res.json();
+    if(!j||!j.ok||!Array.isArray(j.results)) throw new Error('bad');
+    return j.results;
+  }finally{ clearTimeout(tm); }
+}
+function alaCatByAr(ar){
+  for(var i=0;i<ALA_CATS.length;i++){ if(ALA_CATS[i].ar===ar) return ALA_CATS[i]; }
+  return null;
+}
 async function alaWork(){
   if(alaBusy) return; alaBusy=true;
   while(alaQueue.length){
     var key=alaQueue.shift(), st=alaState[key]; if(!st||!st.u) continue;
     st.queued=false; var u=st.u, found=0, lastErr='', missing=ALA_CATS.slice();
     alaRelease(key); st.lat=u.lat; st.lon=u.lon;
-    if(alaReady){
+    var wk=null;
+    if(ALA_WORKER){ try{ alaSay('🔎 علاء الدين (worker)…'); wk=await alaFetchWorker(u); }catch(e){ wk=null; } }
+    if(wk){
+      wk.forEach(function(r){
+        var c=alaCatByAr(r.ar);
+        if(c&&alaState[key]&&alaAdd(key,u,c,[{type:'n',id:r.id,lat:r.lat,lon:r.lon,tags:{name:r.name}}])) found++;
+      });
+      missing=[];
+    }
+    else if(ALA_USE_LAMP&&alaReady){
       for(var ci=0;ci<ALA_CATS.length&&alaState[key];ci++){
         var cc=ALA_CATS[ci]; alaSay('🔎 '+cc.e+' '+cc.ar+' … ('+(ci+1)+'/'+ALA_CATS.length+') — '+found);
         var poi=await alaAskLamp(cc,u);
