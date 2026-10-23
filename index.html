@@ -1071,7 +1071,7 @@ function railSeed(rows){
 }
 function railAlarm(key,age){
   var s=railSt[key];
-  return !!(s && s.start && s.n>=3 && s.last-s.start>=RAIL_MS && age<=180);
+  return !!(s && s.start && s.n>=3 && s.last-s.start>=RAIL_MS);
 }
 async function loadUsers(){
   var st=document.getElementById('st');
@@ -1357,13 +1357,13 @@ function computeRisks(){
     /* إنذار Qitari يرنّ عند هذا المستخدم (مُرسَل من تطبيقه نفسه) = 100% أحمر */
     var age=(Date.now()-new Date(u.created_at))/1000;
     var skull=railAlarm(key,age);
-    var alarm=((u.alarm===true && age<=180) || skull);
+    var alarm=((u.alarm===true) || skull);
     var pct=alarm?100:((best&&best.d<T)?riskPct(best.d):0);
     var col=alarm?'r':(pct>0?'o':'g');
     if(!alarm&&pct===0) greens.push({key:key,u:u});
     if(alarm) list.push({kind:'u',a:(u.device||'مستخدم'),b:best?best.t.id:'—',d:best?best.d:null,pct:100,alarm:true,sk:skull,pa:[u.lat,u.lon],pb:best?[best.t.lat,best.t.lon]:null});
     else if(pct>0) list.push({kind:'u',a:(u.device||'مستخدم'),b:best.t.id,d:best.d,pct:pct,alarm:false,pa:[u.lat,u.lon],pb:[best.t.lat,best.t.lon]});
-    var html=skull?'<div class="rc r sk">💀</div>':'<div class="rc '+col+(age>180?' stale':'')+'">'+pct+'%</div>';
+    var html=skull?'<div class="rc r sk">💀</div>':'<div class="rc '+col+'">'+pct+'%</div>';
     var pop='<b>'+esc(u.device)+'</b><br>'+esc(u.os)+' · '+esc(u.browser)+'<br>'+esc(u.lat.toFixed(6))+', '+esc(u.lon.toFixed(6))+
       '<br>±'+esc(u.accuracy==null?'?':Math.round(u.accuracy))+' م · '+(u.speed?(u.speed*3.6).toFixed(1):'0')+' كم/سا<br>'+(age<90?Math.round(age)+' ث':Math.round(age/60)+' د')+
       nearTrainHtml(u,best)+'<br><b>'+pct+'%</b>'+(skull?' 💀 ≤10 م / ≥2 د':(alarm?' 🔔':''))+'<br><small>'+esc(u.device_id)+'</small>';
@@ -1423,8 +1423,8 @@ function connectRealtime(){
 document.getElementById('win').onchange=function(){ loadUsers(); };
 loadUsers(); loadTrains(); connectRealtime(); loadOsm();
 /* احتياط: إن لم يعمل البث المباشر نعود للجلب كل 5 ث، وإلا مزامنة كل 60 ث فقط */
-setInterval(function(){ if(!rtOpen) loadUsers(); },5000);
-setInterval(function(){ if(rtOpen) loadUsers(); },60000);
+var luBusy=false;
+setInterval(function(){ if(luBusy) return; luBusy=true; Promise.resolve(loadUsers()).then(function(){ luBusy=false; },function(){ luBusy=false; }); },1000);
 setInterval(scheduleRisks,5000);
 setInterval(loadTrains,15000);
 /* ===== PWA: service worker (نفس أسلوب Qitari: network-first) ===== */
