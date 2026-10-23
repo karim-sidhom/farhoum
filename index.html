@@ -1162,6 +1162,10 @@ function alaCatOf(t){
   for(var i=0;i<ALA_CATS.length;i++){ var c=ALA_CATS[i]; if(t[c.k]===c.v && (!c.x||t[c.x[0]]===c.x[1])) return c; }
   return null;
 }
+function alaReleaseOld(key,old){
+  var st=alaState[key], keep=(st&&st.pois)||[];
+  old.forEach(function(pk){ if(keep.indexOf(pk)>=0) return; var o=alaPoi[pk]; if(!o) return; delete o.users[key]; if(!Object.keys(o.users).length){ alaLayer.removeLayer(o.m); delete alaPoi[pk]; } });
+}
 function alaRelease(key){
   var st=alaState[key]; if(!st||!st.pois) return;
   st.pois.forEach(function(pk){ var o=alaPoi[pk]; if(!o) return; delete o.users[key]; if(!Object.keys(o.users).length){ alaLayer.removeLayer(o.m); delete alaPoi[pk]; } });
@@ -1258,7 +1262,7 @@ async function alaWork(){
   while(alaQueue.length){
     var key=alaQueue.shift(), st=alaState[key]; if(!st||!st.u) continue;
     st.queued=false; var u=st.u, found=0, lastErr='', missing=ALA_CATS.slice();
-    alaRelease(key); st.lat=u.lat; st.lon=u.lon;
+    var oldPois=st.pois||[]; st.pois=[]; st.lat=u.lat; st.lon=u.lon;
     var wk=null;
     if(ALA_WORKER){ try{ alaSay('🔎 علاء الدين (worker)…'); wk=await alaFetchWorker(u); }catch(e){ wk=null; } }
     if(wk){
@@ -1288,6 +1292,9 @@ async function alaWork(){
       }catch(e){ lastErr=String(e&&e.message||e); break; }
       await new Promise(function(res){ setTimeout(res,1500); });
     }
+    if(alaState[key]!==st){ st.pois=[]; alaReleaseOld(key,oldPois); }
+    else if(found>0) alaReleaseOld(key,oldPois);
+    else st.pois=oldPois;
     if(lastErr&&!found){ st.lat=null; alaSay('⚠️ علاء الدين: '+lastErr); await new Promise(function(res){ setTimeout(res,10000); }); }
     else alaSay('✅ علاء الدين: '+found+' / '+ALA_CATS.length+(lastErr?' ⚠️ '+lastErr:''));
   }
@@ -1299,7 +1306,7 @@ function aladdinSync(greens){
   greens=greens.slice().sort(function(x,y){ return QT.haversine([x.u.lat,x.u.lon],[ctr.lat,ctr.lng])-QT.haversine([y.u.lat,y.u.lon],[ctr.lat,ctr.lng]); });
   var shown=0;
   greens.forEach(function(g){
-    var key=g.key, u=g.u; if(!b.contains([u.lat,u.lon])||shown>=25) return; shown++;
+    var key=g.key, u=g.u; shown++;
     alive[key]=1;
     var st=alaState[key]||(alaState[key]={pois:[],lat:null,lon:null,queued:false});
     st.u=u;
@@ -1307,7 +1314,7 @@ function aladdinSync(greens){
     if(moved&&!st.queued){ st.queued=true; alaQueue.push(key); }
   });
   Object.keys(alaState).forEach(function(k){ if(!alive[k]){ alaRelease(k); delete alaState[k]; } });
-  if(!alaBusy){ var n=Object.keys(alive).length; if(!n) alaSay('🟢 '+greens.length+(greens.length?' — قرّب الخريطة من دائرة خضراء':' (لا دائرة خضراء)')); }
+  if(!alaBusy){ var n=Object.keys(alive).length; if(!n) alaSay('🟢 0'); }
   alaWork();
 }
 /* حركة سلسة مستمرة لموقع المستخدم (بدل القفز عند كل تحديث) */
@@ -1348,7 +1355,7 @@ function nearTrainHtml(u,best){
 }
 function computeRisks(){
   riskLayer.clearLayers();
-  var list=[], T=QT.THR, alive={}, greens=[];
+  var list=[], T=QT.THR, alive={}, greens=[], everyone=[];
   rebuildLastUsers();
   lastUsers.forEach(function(u){
     var key=u.device_id||('r'+u.id); alive[key]=1;
@@ -1361,6 +1368,7 @@ function computeRisks(){
     var pct=alarm?100:((best&&best.d<T)?riskPct(best.d):0);
     var col=alarm?'r':(pct>0?'o':'g');
     if(!alarm&&pct===0) greens.push({key:key,u:u});
+    everyone.push({key:key,u:u});
     if(alarm) list.push({kind:'u',a:(u.device||'مستخدم'),b:best?best.t.id:'—',d:best?best.d:null,pct:100,alarm:true,sk:skull,pa:[u.lat,u.lon],pb:best?[best.t.lat,best.t.lon]:null});
     else if(pct>0) list.push({kind:'u',a:(u.device||'مستخدم'),b:best.t.id,d:best.d,pct:pct,alarm:false,pa:[u.lat,u.lon],pb:[best.t.lat,best.t.lon]});
     var html=skull?'<div class="rc r sk">💀</div>':'<div class="rc '+col+'">'+pct+'%</div>';
@@ -1385,7 +1393,7 @@ function computeRisks(){
   });
   Object.keys(userMarkers).forEach(function(k){ if(!alive[k]){ layer.removeLayer(userMarkers[k]); delete userMarkers[k]; } });
   Object.keys(userCircles).forEach(function(k){ if(!alive[k]){ accLayer.removeLayer(userCircles[k]); delete userCircles[k]; } });
-  try{ aladdinSync(greens); }catch(e){}
+  try{ aladdinSync(everyone); }catch(e){}
   list.sort(function(x,y){return y.pct-x.pct});
   list.forEach(function(r){ if(!r.pb) return; L.polyline([r.pa,r.pb],{color:'#ff2d2d',weight:4,dashArray:'6 6'}).addTo(riskLayer).bindTooltip(r.pct+'%',{permanent:true,className:'train-label'}); });
   var el=document.getElementById('risk');
