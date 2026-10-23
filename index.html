@@ -1327,6 +1327,9 @@ function glideTo(key,u,m,c){
   var dt=now-g.last; g.last=now;
   g.flat=g.lat; g.flon=g.lon; g.tlat=u.lat; g.tlon=u.lon; g.t0=now;
   g.dur=Math.min(4000,Math.max(600,dt));
+  /* même comportement que la voiture : position appliquée immédiatement, sans glissement */
+  g.flat=u.lat; g.flon=u.lon; g.lat=u.lat; g.lon=u.lon;
+  if(g.m) g.m.setLatLng([u.lat,u.lon]); if(g.c) g.c.setLatLng([u.lat,u.lon]);
   if(!glide._raf) glide._raf=requestAnimationFrame(glideStep);
 }
 function glideStep(){
@@ -1405,7 +1408,7 @@ function computeRisks(){
 }
 /* ===== مباشر (Supabase Realtime / WebSocket): كل تحديث مستخدم يصل فوراً بلا انتظار ===== */
 var rtTimer=null, rtDirty=false;
-function scheduleRisks(){ if(rtTimer) return; rtTimer=setTimeout(function(){ rtTimer=null; computeRisks(); },300); }
+function scheduleRisks(){ if(rtTimer) return; rtTimer=setTimeout(function(){ rtTimer=null; computeRisks(); },0); }
 function connectRealtime(){
   var ws;
   try{ ws=new WebSocket(SUPABASE_URL.replace('https://','wss://')+'/realtime/v1/websocket?apikey='+SUPABASE_KEY+'&vsn=1.0.0'); }catch(e){ setTimeout(connectRealtime,5000); return; }
