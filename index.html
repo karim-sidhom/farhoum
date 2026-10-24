@@ -2847,7 +2847,7 @@ if('serviceWorker' in navigator){
         }
         if(!pos) continue;
         placed[r.lien]=1; ok++;
-        L.marker([pos.lat,pos.lon],{icon:(r.image&&/^https?:/.test(r.image))?L.divIcon({className:'glv-logo',html:'<img src="'+esc(r.image)+'" referrerpolicy="no-referrer" style="width:34px;height:34px;border-radius:50%;object-fit:cover;border:2px solid #d4af37;background:#fff;box-shadow:0 1px 4px #0006" onerror="this.outerHTML=\'🍔\'">',iconSize:[34,34],iconAnchor:[17,17]}):L.divIcon({className:'ala-poi',html:'🍔',iconSize:[24,24],iconAnchor:[12,12]}),zIndexOffset:300}).addTo(glvLayer).bindPopup('🍔 <a href="'+esc(r.lien)+'" target="_blank" rel="noopener">'+esc(r.nom)+'</a>'+(label?'<br>'+esc(label):''));
+        L.marker([pos.lat,pos.lon],{icon:(r.image&&/^https?:/.test(r.image))?L.divIcon({className:'glv-logo',html:'<img src="'+esc(r.image)+'" referrerpolicy="no-referrer" style="width:34px;height:34px;border-radius:50%;object-fit:cover;border:2px solid #d4af37;background:#fff;box-shadow:0 1px 4px #0006" onerror="this.outerHTML=\'🍔\'">',iconSize:[34,34],iconAnchor:[17,17]}):L.divIcon({className:'ala-poi',html:'🍔',iconSize:[24,24],iconAnchor:[12,12]}),zIndexOffset:300}).addTo(glvLayer).bindPopup('🍔 <a href="'+esc(r.lien)+'" target="_blank" rel="noopener">'+esc(r.nom)+'</a>'+(label?'<br>'+esc(label):'')+'<br>'+advMenuLnk(r.lien,g.city.slug,r.nom)+advInfo(pos.lat,pos.lon,r.lien,g.city.slug));
       }
     }
     if(out) out.insertAdjacentHTML('afterbegin','<div class="prgR">📍 '+ok+' / '+total+' على الخريطة</div>');
@@ -2876,7 +2876,7 @@ if('serviceWorker' in navigator){
         var near=ps.some(function(p){ return QT.haversine([p.lat,p.lon],[r.lat,r.lon])<=5000; });
         if(!near) return; n++; names.push(r.nom);
         var ic=(r.image&&/^https?:/.test(r.image))?L.divIcon({className:'glv-logo',html:'<img src="'+esc(r.image)+'" referrerpolicy="no-referrer" style="width:34px;height:34px;border-radius:50%;object-fit:cover;border:2px solid #d4af37;background:#fff;box-shadow:0 1px 4px #0006" onerror="this.outerHTML=\'🍽️\'">',iconSize:[34,34],iconAnchor:[17,17]}):L.divIcon({className:'ala-poi',html:'🍽️',iconSize:[24,24],iconAnchor:[12,12]});
-        L.marker([r.lat,r.lon],{icon:ic,zIndexOffset:310}).addTo(dinLayer).bindPopup('🍽️ <b>'+esc(r.nom)+'</b>'+(r.adr?'<br>'+esc(r.adr):'')+(r.tel?'<br>'+esc(r.tel):'')+'<br><a href="https://dinner.tn/menu?code='+encodeURIComponent(r.slug||'')+'" target="_blank" rel="noopener">'+esc(r.nom)+'</a>');
+        L.marker([r.lat,r.lon],{icon:ic,zIndexOffset:310}).addTo(dinLayer).bindPopup('🍽️ <b>'+esc(r.nom)+'</b>'+(r.adr?'<br>'+esc(r.adr):'')+(r.tel?'<br>'+esc(r.tel):'')+'<br><a href="https://dinner.tn/menu?code='+encodeURIComponent(r.slug||'')+'" target="_blank" rel="noopener">📖 '+esc(r.nom)+'</a>'+advInfo(r.lat,r.lon,null,null));
       });
       if(out) out.insertAdjacentHTML('afterbegin','<div class="prgR">🍽️ '+n+' / '+all.length+' على الخريطة'+(n?' — '+names.map(esc).join(' · '):'')+'</div>');
     }catch(e){ if(out) out.insertAdjacentHTML('afterbegin','<div class="prgE">🍽️ '+esc(e.message||e)+'</div>'); }
@@ -3017,7 +3017,7 @@ if('serviceWorker' in navigator){
     ['Snap food','Nabeul (position approximative)',36.4502,10.7392],['Shelby\'s food','Nabeul (position approximative)',36.4507,10.7421],['Cent 6 Fast-food Nabeul','Nabeul (position approximative)',36.4498,10.7365],['Ness cute nabeul','Nabeul (position approximative)',36.4497,10.7381],['Restopizzaria EVERYDAY','Nabeul (position approximative)',36.4477,10.7324],['Roxford','Nabeul (position approximative)',36.4469,10.7311],['MC LOUNGE','Nabeul (position approximative)',36.4456,10.732],['Five food','Nabeul (position approximative)',36.4474,10.736],['Trancetta','Nabeul (position approximative)',36.4465,10.7378],['O.smash burger','Nabeul (position approximative)',36.4467,10.7385],['Top Food Mlewi','Nabeul (position approximative)',36.4468,10.7311],['Elmakhmakh Nabeul','Nabeul (position approximative)',36.4458,10.7291],['El chi5 restaurant Fast food','Nabeul (position approximative)',36.4437,10.7207],['Foodies 90','Nabeul (position approximative)',36.4428,10.7218],['Patty Junkie','Nabeul (position approximative)',36.4422,10.7197],['Betta Food','Nabeul (position approximative)',36.4395,10.7127],['The Corner Hammamet','Hammamet (position approximative)',36.4286,10.6942],['Lella Rayhana','Mrezga / Nabeul (position approximative)',36.4439,10.7207]
   ];
   var manLayer=L.layerGroup().addTo(map);
-  MANUAL.forEach(function(r){ L.marker([r[2],r[3]],{icon:L.divIcon({className:'ala-poi',html:'🍴',iconSize:[24,24],iconAnchor:[12,12]}),zIndexOffset:320}).addTo(manLayer).bindPopup('🍴 <b>'+esc(r[0])+'</b><br>'+esc(r[1])); });
+  MANUAL.forEach(function(r){ L.marker([r[2],r[3]],{icon:L.divIcon({className:'ala-poi',html:'🍴',iconSize:[24,24],iconAnchor:[12,12]}),zIndexOffset:320}).addTo(manLayer).bindPopup('🍴 <b>'+esc(r[0])+'</b><br>'+esc(r[1])+'<br><i>القائمة غير متوفرة</i>'+advInfo(r[2],r[3],null,null)); });
   /* ===== 🧞 مستشار فرحوم: يسأل عن البرنامج والميزانية، يقرأ كل القوائم ويقترح المطاعم والأطباق داخل المنطقة ===== */
   var advLayer=L.layerGroup().addTo(map), advC=null, advCircle=null, advBusy=false, advPick=false;
   var SYN=[
@@ -3038,6 +3038,56 @@ if('serviceWorker' in navigator){
     [['viande','لحم','grillade','مشوي','grill','mixed grill','كباب','kebab'],['grill','grillade','viande','kebab','brochette','steak','mechoui','côte','cote']],
     [['couscous','كسكسي','tunisien','تونسي','ma9loub','lablabi','ojja','عجة','لبلابي'],['couscous','ojja','lablabi','brik','tajine','ma9loub','عجة','كسكسي']]
   ];
+  /* 📖 قائمة المطعم عند الضغط عليه */
+  var menuMem={};
+  function advMenuLnk(lien,ville,nom){
+    var m=/\/stores\/([^/?#]+)/.exec(lien||''); if(!m) return '';
+    return '<a href="#" class="glvMenuLnk" data-slug="'+esc(m[1])+'" data-ville="'+esc(ville)+'" data-nom="'+esc(nom)+'" data-lien="'+esc(lien)+'" style="color:#ffd966;font-weight:800">📖 القائمة</a>';
+  }
+  async function openMenu(slug,ville,nom,lien){
+    var box=document.getElementById('glvMenuBox');
+    if(!box){ box=document.createElement('div'); box.id='glvMenuBox'; box.style.cssText='position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:2500;width:min(440px,calc(100vw - 24px));max-height:78vh;overflow:auto;background:#0d1a6eF7;color:#fff;border:1px solid #d4af37;border-radius:12px;padding:12px;direction:rtl;font-size:14px;box-shadow:0 8px 30px #000a'; document.body.appendChild(box); }
+    box.style.display='block';
+    var head='<div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:16px">📖 '+esc(nom)+'</b><button id="glvMenuX" style="background:#d4af37;color:#0d1a6e;border:0;border-radius:8px;padding:4px 10px;font-weight:800;cursor:pointer">✕</button></div>';
+    box.innerHTML=head+'<div class="prgR">⏳ جارٍ تحميل القائمة…</div>';
+    document.getElementById('glvMenuX').onclick=function(){ box.style.display='none'; };
+    var k=ville+'|'+slug, plats=menuMem[k];
+    if(!plats){ plats=[]; try{ var res=await fetch(W+'/menu?slug='+encodeURIComponent(slug)+'&ville='+encodeURIComponent(ville)); if(res.ok){ var j=await res.json(); plats=(j&&j.plats)||[]; } }catch(e){} if(plats.length) menuMem[k]=plats; }
+    var cats=[], by={}; plats.forEach(function(p){ var c=p.categorie||'—'; if(!by[c]){ by[c]=[]; cats.push(c); } by[c].push(p); });
+    var body=!plats.length?'<div class="prgE">القائمة غير متوفرة.</div>':cats.map(function(c){ return '<div class="prgR"><b>'+esc(c)+'</b>'+by[c].map(function(p){ return '<br>• '+esc(p.nom)+(p.prix!=null?' — <b>'+esc(p.prix)+' DT</b>':''); }).join('')+'</div>'; }).join('');
+    box.innerHTML=head+(lien?'<div style="margin:4px 0"><a href="'+esc(lien)+'" target="_blank" rel="noopener" style="color:#ffd966">↗ Glovo</a></div>':'')+body;
+    document.getElementById('glvMenuX').onclick=function(){ box.style.display='none'; };
+  }
+  document.addEventListener('click',function(e){ var a=e.target.closest&&e.target.closest('.glvMenuLnk'); if(!a) return; e.preventDefault(); openMenu(a.dataset.slug,a.dataset.ville,a.dataset.nom,a.dataset.lien); });
+  /* ℹ️ داخل كل نافذة مطعم على الخريطة: المسافة عنك + مجال الأسعار */
+  var meMem=null;
+  async function advMe(){
+    if(window.__glvRef) return {lat:window.__glvRef.lat,lon:window.__glvRef.lon};
+    if(meMem) return meMem;
+    var pos=await new Promise(function(ok){ if(!navigator.geolocation){ ok(null); return; } navigator.geolocation.getCurrentPosition(function(p){ ok({lat:p.coords.latitude,lon:p.coords.longitude}); },function(){ ok(null); },{timeout:6000,maximumAge:300000}); });
+    if(pos) meMem=pos; else if(advC) pos={lat:advC.lat,lon:advC.lon};
+    return pos;
+  }
+  function advInfo(la,lo,lien,ville){
+    var m=/\/stores\/([^/?#]+)/.exec(lien||'');
+    return '<div class="glvInfo" data-lat="'+(la!=null?la:'')+'" data-lon="'+(lo!=null?lo:'')+'"'+(m?' data-slug="'+esc(m[1])+'" data-ville="'+esc(ville)+'"':'')+' style="margin-top:4px;font-size:12px">⏳</div>';
+  }
+  map.on('popupopen',async function(ev){
+    var el=ev.popup.getElement&&ev.popup.getElement(); if(!el) return; var d=el.querySelector('.glvInfo'); if(!d||d.dataset.done) return; d.dataset.done='1';
+    var lines=[], la=parseFloat(d.dataset.lat), lo=parseFloat(d.dataset.lon);
+    if(isFinite(la)&&isFinite(lo)){
+      var me=await advMe();
+      if(me){ var m=QT.haversine([me.lat,me.lon],[la,lo]); lines.push('📏 يبعد عنك '+(m<1000?Math.round(m)+' م':(m/1000).toFixed(1)+' كم')); }
+    }
+    if(d.dataset.slug){
+      d.innerHTML=lines.concat(['💰 …']).join('<br>');
+      var k=d.dataset.ville+'|'+d.dataset.slug, pl=menuMem[k];
+      if(!pl){ pl=[]; try{ var res=await fetch(W+'/menu?slug='+encodeURIComponent(d.dataset.slug)+'&ville='+encodeURIComponent(d.dataset.ville)); if(res.ok){ var j=await res.json(); pl=(j&&j.plats)||[]; } }catch(e){} if(pl.length) menuMem[k]=pl; }
+      var pr=pl.map(function(p){return Number(p.prix);}).filter(function(x){return isFinite(x)&&x>0;});
+      lines.push(pr.length?'💰 من '+Math.min.apply(null,pr)+' إلى '+Math.max.apply(null,pr)+' DT ('+pr.length+' طبق)':'💰 القائمة غير متوفرة');
+    }
+    d.innerHTML=lines.join('<br>')||'';
+  });
   function advGps(la,lo){ return (la!=null&&lo!=null)?'<a href="https://www.google.com/maps/search/?api=1&query='+la+','+lo+'" target="_blank" rel="noopener" title="GPS" style="text-decoration:none">📍</a> ':''; }
   /* worker restos-tn : GPS de tous les restaurants / fast-foods (OpenStreetMap) autour de la zone */
   var WR='https://spring-bonus-c1ea.lordsidhom78.workers.dev', osmLayer=L.layerGroup().addTo(map);
@@ -3054,7 +3104,7 @@ if('serviceWorker' in navigator){
         osmMem[key]=l;
       }catch(e){ l=[]; }
     }
-    l.forEach(function(x){ L.marker([x.lat,x.lon],{icon:L.divIcon({className:'ala-poi',html:'🍴',iconSize:[22,22],iconAnchor:[11,11]}),zIndexOffset:250}).addTo(osmLayer).bindPopup('🍴 <b>'+esc(x.nom)+'</b>'+(x.cuisine?'<br>'+esc(x.cuisine):'')+(x.tel?'<br>'+esc(x.tel):'')+'<br>'+advGps(x.lat,x.lon)+'GPS'); });
+    l.forEach(function(x){ L.marker([x.lat,x.lon],{icon:L.divIcon({className:'ala-poi',html:'🍴',iconSize:[22,22],iconAnchor:[11,11]}),zIndexOffset:250}).addTo(osmLayer).bindPopup('🍴 <b>'+esc(x.nom)+'</b>'+(x.cuisine?'<br>'+esc(x.cuisine):'')+(x.tel?'<br>'+esc(x.tel):'')+'<br>'+advGps(x.lat,x.lon)+'GPS<br><i>القائمة غير متوفرة</i>'+advInfo(x.lat,x.lon,null,null)); });
     return l;
   }
   function advMatch(nom,osm){
@@ -3138,8 +3188,8 @@ if('serviceWorker' in navigator){
       var sp=[];
       top.forEach(function(t,ix){
         var show=t.dishes.slice(0,3);
-        html+='<div class="prgR"><b>'+(ix+1)+'. '+advGps(t.z.lat,t.z.lon)+'<a href="'+esc(t.z.r.lien)+'" target="_blank" rel="noopener" style="color:#ffd966">'+esc(t.z.r.nom)+'</a></b> · '+(t.z.lat!=null?Math.round(t.d)+' م':'📍 الموقع غير معروف')+(t.hits?' ✅':'')+'<br>'+show.map(function(d){ return '• '+esc(d.nom)+' — <b>'+d.prix+' DT</b>'; }).join('<br>')+'</div>';
-        if(t.z.lat!=null) L.marker([t.z.lat,t.z.lon],{icon:L.divIcon({className:'ala-poi',html:'<b style="background:#d4af37;color:#0d1a6e;border-radius:50%;padding:2px 7px">'+(ix+1)+'</b>',iconSize:[26,26],iconAnchor:[13,13]}),zIndexOffset:600}).addTo(advLayer).bindPopup('🧞 '+esc(t.z.r.nom)+'<br>'+show.map(function(d){return esc(d.nom)+' — '+d.prix+' DT';}).join('<br>'));
+        html+='<div class="prgR"><b>'+(ix+1)+'. '+advGps(t.z.lat,t.z.lon)+esc(t.z.r.nom)+'</b> '+advMenuLnk(t.z.r.lien,city.slug,t.z.r.nom)+' · '+(t.z.lat!=null?Math.round(t.d)+' م':'📍 الموقع غير معروف')+(t.hits?' ✅':'')+'<br>'+show.map(function(d){ return '• '+esc(d.nom)+' — <b>'+d.prix+' DT</b>'; }).join('<br>')+'</div>';
+        if(t.z.lat!=null) L.marker([t.z.lat,t.z.lon],{icon:L.divIcon({className:'ala-poi',html:'<b style="background:#d4af37;color:#0d1a6e;border-radius:50%;padding:2px 7px">'+(ix+1)+'</b>',iconSize:[26,26],iconAnchor:[13,13]}),zIndexOffset:600}).addTo(advLayer).bindPopup('🧞 <b>'+esc(t.z.r.nom)+'</b><br>'+show.map(function(d){return esc(d.nom)+' — '+d.prix+' DT';}).join('<br>')+'<br>'+advMenuLnk(t.z.r.lien,city.slug,t.z.r.nom)+advInfo(t.z.lat,t.z.lon,t.z.r.lien,city.slug));
         sp.push({n:t.z.r.nom,d:show});
       });
       if(dins.length) html+='<div class="prgR">🍽️ مطاعم Dinner في المنطقة (بدون قائمة): '+dins.slice(0,8).map(function(d){ return esc(d.nom); }).join(' · ')+'</div>';
@@ -3163,7 +3213,7 @@ if('serviceWorker' in navigator){
     var list=await fetchCity(city), zone=[], osm=await advOsm(radius);
     for(var i=0;i<list.length;i+=6){
       var part=list.slice(i,i+6), geos=await Promise.all(part.map(function(r){ return glvGeo(r,city); }));
-      geos.forEach(function(gp,k){ if(gp&&gp.lat!=null){ var d=QT.haversine([advC.lat,advC.lon],[gp.lat,gp.lon]); if(d<=radius) zone.push({r:part[k],d:d,lat:gp.lat,lon:gp.lon}); } else { var mt=advMatch(part[k].nom,osm); if(mt&&QT.haversine([advC.lat,advC.lon],[mt.lat,mt.lon])<=radius) zone.push({r:part[k],d:QT.haversine([advC.lat,advC.lon],[mt.lat,mt.lon]),lat:mt.lat,lon:mt.lon}); else zone.push({r:part[k],d:null,lat:null,lon:null}); } });
+      geos.forEach(function(gp,k){ if(gp&&gp.lat!=null){ var d=QT.haversine([advC.lat,advC.lon],[gp.lat,gp.lon]); if(d<=radius) zone.push({r:part[k],d:d,v:city.slug,lat:gp.lat,lon:gp.lon}); } else { var mt=advMatch(part[k].nom,osm); if(mt&&QT.haversine([advC.lat,advC.lon],[mt.lat,mt.lon])<=radius) zone.push({r:part[k],d:QT.haversine([advC.lat,advC.lon],[mt.lat,mt.lon]),v:city.slug,lat:mt.lat,lon:mt.lon}); else zone.push({r:part[k],d:null,v:city.slug,lat:null,lon:null}); } });
     }
     for(var j=0;j<zone.length;j+=4){
       if(id!==readId) return null;
@@ -3187,13 +3237,13 @@ if('serviceWorker' in navigator){
         z.plats.forEach(function(p){
           var pr=Number(p.prix); if(!isFinite(pr)||pr<=0) return; if(bud&&pr>bud) return;
           var tx=advNorm((p.nom||'')+' '+(p.categorie||''));
-          if(terms.some(function(t){ return tx.indexOf(t)>=0; })) rows.push({resto:z.r.nom,lien:z.r.lien,lat:z.lat,lon:z.lon,nom:p.nom,cat:p.categorie||'',prix:pr,d:z.d});
+          if(terms.some(function(t){ return tx.indexOf(t)>=0; })) rows.push({resto:z.r.nom,lien:z.r.lien,ville:z.v,lat:z.lat,lon:z.lon,nom:p.nom,cat:p.categorie||'',prix:pr,d:z.d});
         });
       });
       rows.sort(function(a,b){ return a.prix-b.prix||a.resto.localeCompare(b.resto); });
       var html='<div class="prgR"><b>🔎 «'+esc(document.getElementById('glvQ').value)+'» : '+rows.length+' طبق في '+new Set(rows.map(function(r){return r.resto;})).size+' مطعم</b> · قوائم مقروءة: '+nMenu+'/'+zone.length+(bud?' · ≤ '+bud+' DT':'')+'</div>';
       if(!rows.length) html+='<div class="prgE">ما لقيت حتى طبق بهذا الاسم.</div>';
-      html+=rows.map(function(r){ return '<div class="prgR">'+advGps(r.lat,r.lon)+'<a href="'+esc(r.lien)+'" target="_blank" rel="noopener" style="color:#ffd966"><b>'+esc(r.resto)+'</b></a> — '+esc(r.nom)+' — <b>'+r.prix+' DT</b>'+(r.d!=null?' · '+Math.round(r.d)+' م':'')+'</div>'; }).join('');
+      html+=rows.map(function(r){ return '<div class="prgR">'+advGps(r.lat,r.lon)+'<b>'+esc(r.resto)+'</b> '+advMenuLnk(r.lien,r.ville,r.resto)+' — '+esc(r.nom)+' — <b>'+r.prix+' DT</b>'+(r.d!=null?' · '+Math.round(r.d)+' م':'')+'</div>'; }).join('');
       out.innerHTML=html;
     }catch(e){ out.innerHTML='<div class="prgE">'+esc(e.message||e)+'</div>'; }
     advBusy=false;
