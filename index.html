@@ -1267,6 +1267,41 @@ function alaCSave(ck,res,complete){
   var ks=Object.keys(c); if(ks.length>ALA_CACHE_MAX){ ks.sort(function(a,b){ return c[a].at-c[b].at; }).slice(0,ks.length-ALA_CACHE_MAX).forEach(function(k){ delete c[k]; }); }
   try{ localStorage.setItem(ALA_CACHE_KEY,JSON.stringify(c)); }catch(e){}
 }
+/* APP-BRIDGE-CLIENT : صيدليتي / محطتي / صلاتي — فرحوم يسأل هذه التطبيقات مباشرة (iframe خفي ?bridge=1)؛ إذا ما ردّتش يبقى البحث القديم (Overpass) */
+var ALA_APP_ORIGIN={'صيدلية':'https://saydaliati.kieda.online','محطة وقود':'https://mahattati.kieda.online','جامع':'https://salati.kieda.online'};
+var alaAppFrames={}, alaAppReadyP={}, alaAppReadyFn={}, alaAppPending={}, alaAppReq=0;
+window.addEventListener('message',function(ev){
+  var d=ev.data; if(!d||typeof d!=='object') return;
+  if(d.type==='app-ready'){ var rf=alaAppReadyFn[ev.origin]; if(rf) rf(true); }
+  else if(d.type==='app-res'){
+    var p=alaAppPending[d.id];
+    if(p&&p.origin===ev.origin){ delete alaAppPending[d.id]; clearTimeout(p.timer); p.done(d.poi||null); }
+  }
+});
+function alaAppFrameFor(origin){
+  if(!alaAppFrames[origin]){
+    var f=document.createElement('iframe');
+    f.style.cssText='position:fixed;left:-9999px;top:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none';
+    f.setAttribute('aria-hidden','true'); f.tabIndex=-1;
+    alaAppReadyP[origin]=new Promise(function(res){ alaAppReadyFn[origin]=res; setTimeout(function(){ res(false); },8000); });
+    f.src=origin+'/?bridge=1';
+    document.body.appendChild(f);
+    alaAppFrames[origin]=f;
+  }
+  return alaAppFrames[origin];
+}
+async function alaAskApp(c,u){
+  var origin=ALA_APP_ORIGIN[c.ar]; if(!origin) return null;
+  var f=alaAppFrameFor(origin), ok=await alaAppReadyP[origin];
+  if(!ok||!f.contentWindow) return null;
+  return new Promise(function(done){
+    var id=++alaAppReq;
+    var timer=setTimeout(function(){ if(alaAppPending[id]){ delete alaAppPending[id]; done(null); } },25000);
+    alaAppPending[id]={origin:origin,done:done,timer:timer};
+    try{ f.contentWindow.postMessage({type:'app-find',id:id,lat:u.lat,lng:u.lon},origin); }
+    catch(e){ delete alaAppPending[id]; clearTimeout(timer); done(null); }
+  });
+}
 async function alaWork(){
   if(alaBusy) return; alaBusy=true;
   while(alaQueue.length){
@@ -1301,6 +1336,15 @@ async function alaWork(){
         await new Promise(function(res){ setTimeout(res,1200); });
       }
       if(!lastErr) missing=[];
+    }
+    if(alaState[key]){
+      var viaApps=ALA_CATS.filter(function(c){ return ALA_APP_ORIGIN[c.ar]; });
+      alaSay('🔎 صيدليتي · محطتي · صلاتي…');
+      var appRes=await Promise.all(viaApps.map(function(c){ return alaAskApp(c,u).catch(function(){ return null; }); }));
+      viaApps.forEach(function(c,i){
+        var poi=appRes[i];
+        if(poi&&alaState[key]&&alaAdd(key,u,c,[{type:'n',id:poi.lat+','+poi.lng,lat:poi.lat,lon:poi.lng,tags:{name:poi.name}}])) found++;
+      });
     }
     var stages=[1500,5000,18000];
     for(var k=0;k<stages.length&&missing.length&&alaState[key];k++){
