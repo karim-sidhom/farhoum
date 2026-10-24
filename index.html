@@ -2922,8 +2922,95 @@ if('serviceWorker' in navigator){
     });
     readMenus(id);
   }
+  /* فرحوم يستكشف محيطه: اسم الشارع + نوع المبنى (OpenStreetMap) + كثافة السيارات (الكاميرا) */
+  var VEH={car:1,truck:1,bus:1,motorcycle:1};
+  var HW_AR={motorway:'طريق سيّار',trunk:'طريق سريعة',primary:'طريق رئيسية',secondary:'طريق ثانوية',tertiary:'طريق فرعية',residential:'شارع سكني',unclassified:'طريق',service:'ممر خدمة',living_street:'شارع هادئ',pedestrian:'ممر مشاة',track:'مسلك',path:'مسلك'};
+  var BD_AR={house:'منزل',residential:'مبنى سكني',apartments:'عمارة سكنية',detached:'فيلا',terrace:'منازل متلاصقة',semidetached_house:'منزل مزدوج',commercial:'مبنى تجاري',retail:'محل تجاري',industrial:'مبنى صناعي',warehouse:'مخزن',office:'مكاتب',school:'مدرسة',hospital:'مستشفى',mosque:'مسجد',church:'كنيسة',hotel:'فندق',garage:'كراج',garages:'كراجات',public:'مبنى عمومي',civic:'مبنى إداري',university:'جامعة',kindergarten:'روضة أطفال',train_station:'محطة قطار',yes:'مبنى'};
+  var AM_AR={mosque:'مسجد',school:'مدرسة',hospital:'مستشفى',clinic:'عيادة',pharmacy:'صيدلية',cafe:'مقهى',restaurant:'مطعم',fast_food:'مطعم وجبات سريعة',bank:'بنك',fuel:'محطة وقود',marketplace:'سوق',police:'مركز شرطة',post_office:'مكتب بريد',townhall:'بلدية',parking:'موقف سيارات'};
+  function isAr(t){ return /[؀-ۿ]/.test(t||''); }
+  function segD(la,lo,a,b){
+    var k=111320, c=Math.cos(la*Math.PI/180), ax=(a.lon-lo)*k*c, ay=(a.lat-la)*k, bx=(b.lon-lo)*k*c, by=(b.lat-la)*k;
+    var dx=bx-ax, dy=by-ay, l=dx*dx+dy*dy, t=l?Math.max(0,Math.min(1,(-ax*dx-ay*dy)/l)):0, x=ax+t*dx, y=ay+t*dy;
+    return Math.sqrt(x*x+y*y);
+  }
+  function ptD(la,lo,a,b){ var k=111320, c=Math.cos(la*Math.PI/180), x=(b-lo)*k*c, y=(a-la)*k; return Math.sqrt(x*x+y*y); }
+  async function envStreet(la,lo){
+    var els=await alaFetch('[out:json][timeout:25];way["highway"]["name"](around:50,'+la+','+lo+');out geom tags;');
+    var best=null, bd=1e9;
+    els.forEach(function(e){ var g=e.geometry||[]; for(var i=0;i<g.length-1;i++){ var d=segD(la,lo,g[i],g[i+1]); if(d<bd){ bd=d; best=e; } } });
+    return best?{name:best.tags['name:ar']||best.tags.name,type:best.tags.highway,lanes:best.tags.lanes,d:bd}:null;
+  }
+  async function envBuild(la,lo){
+    var els=await alaFetch('[out:json][timeout:25];(nwr["building"](around:40,'+la+','+lo+');nwr["amenity"]["name"](around:40,'+la+','+lo+'););out center tags;');
+    var b=null, bd=1e9, pois=[];
+    els.forEach(function(e){
+      var t=e.tags||{}, ela=e.lat!=null?e.lat:(e.center&&e.center.lat), elo=e.lon!=null?e.lon:(e.center&&e.center.lon); if(ela==null) return;
+      var d=ptD(la,lo,ela,elo);
+      if(t.building&&d<bd){ bd=d; b=t; }
+      if(t.amenity&&t.name) pois.push({d:d,t:(AM_AR[t.amenity]||t.amenity),n:t.name});
+    });
+    pois.sort(function(x,y){return x.d-y.d;});
+    return {build:b?(BD_AR[b.building]||(b.amenity&&AM_AR[b.amenity])||b.building):null,levels:b&&b['building:levels']||null,pois:pois.slice(0,3)};
+  }
+  var cocoM=null;
+  function loadJs(src){ return new Promise(function(ok,ko){ var sc=document.createElement('script'); sc.src=src; sc.onload=ok; sc.onerror=function(){ ko(new Error('تعذّر تحميل '+src)); }; document.head.appendChild(sc); }); }
+  async function cocoLoad(){
+    if(cocoM) return cocoM;
+    if(!window.cocoSsd){ await loadJs('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js'); await loadJs('https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js'); }
+    cocoM=await window.cocoSsd.load(); return cocoM;
+  }
+  async function envTraffic(){
+    var stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
+    try{
+      var v=document.createElement('video'); v.muted=true; v.playsInline=true; v.srcObject=stream; await v.play();
+      var model=await cocoLoad(), counts=[];
+      for(var i=0;i<5;i++){
+        await new Promise(function(r){ setTimeout(r,600); });
+        var det=await model.detect(v); counts.push(det.filter(function(x){ return x.score>=0.5&&VEH[x.class]; }).length);
+      }
+      counts.sort(function(a,b){return a-b;}); return counts[2];
+    } finally { stream.getTracks().forEach(function(t){ t.stop(); }); }
+  }
+  function trafficLvl(n){ return n===0?'الطريق فارغة':n<=2?'حركة المرور خفيفة':n<=5?'حركة المرور متوسطة':'حركة المرور كثيفة'; }
+  async function envRead(){
+    var out=document.getElementById('glvOut'); stopRead(); var id=readId;
+    out.innerHTML='<div class="prgR">⏳ فرحوم يستكشف محيطه…</div>';
+    var pos=await new Promise(function(ok){
+      if(!navigator.geolocation){ ok(null); return; }
+      navigator.geolocation.getCurrentPosition(function(p){ ok({lat:p.coords.latitude,lon:p.coords.longitude}); },function(){ ok(null); },{enableHighAccuracy:true,timeout:15000});
+    });
+    if(!pos&&window.__glvRef) pos={lat:window.__glvRef.lat,lon:window.__glvRef.lon};
+    if(!pos){ out.innerHTML='<div class="prgE">تعذّر تحديد الموقع.</div>'; return; }
+    var errs=[];
+    var r=await Promise.all([
+      envStreet(pos.lat,pos.lon).catch(function(e){ errs.push('الشارع: '+(e.message||e)); return null; }),
+      envBuild(pos.lat,pos.lon).catch(function(e){ errs.push('المباني: '+(e.message||e)); return null; }),
+      envTraffic().catch(function(e){ errs.push('الكاميرا: '+(e.message||e)); return null; })
+    ]);
+    if(id!==readId) return;
+    var st=r[0], bl=r[1], tr=r[2], html='';
+    if(st){
+      html+='<div class="prgR">🛣️ '+esc(st.name)+' — '+esc(HW_AR[st.type]||st.type)+(st.lanes?' — '+esc(st.lanes)+' مسالك':'')+'</div>';
+      if(isAr(st.name)){ say('أنا الآن في '+st.name+'، وهي '+(HW_AR[st.type]||'طريق'),'ar-SA'); }
+      else { say('أنا الآن في','ar-SA'); say(st.name,'fr-FR'); say('وهي '+(HW_AR[st.type]||'طريق'),'ar-SA'); }
+    } else if(!errs.some(function(x){return x.indexOf('الشارع')===0;})){ html+='<div class="prgR">🛣️ لا يوجد شارع مسمّى قريب</div>'; say('لا يوجد شارع مسمّى قريب','ar-SA'); }
+    if(bl&&bl.build){
+      html+='<div class="prgR">🏢 '+esc(bl.build)+(bl.levels?' — '+esc(bl.levels)+' طوابق':'')+'</div>';
+      say('أقرب مبنى: '+bl.build+(bl.levels?'، '+bl.levels+' طوابق':''),'ar-SA');
+    } else if(bl){ html+='<div class="prgR">🏢 لا توجد معطيات عن المبنى</div>'; say('لا توجد معطيات عن المبنى','ar-SA'); }
+    if(bl&&bl.pois.length){
+      html+='<div class="prgR">📍 '+bl.pois.map(function(p){ return esc(p.t+' '+p.n); }).join(' · ')+'</div>';
+      bl.pois.forEach(function(p){ say(p.t,'ar-SA'); say(p.n,isAr(p.n)?'ar-SA':'fr-FR'); });
+    }
+    if(tr!=null){
+      html+='<div class="prgR">🚗 '+trafficLvl(tr)+' ('+tr+')</div>';
+      say(trafficLvl(tr),'ar-SA');
+    }
+    errs.forEach(function(x){ html+='<div class="prgE">'+esc(x)+'</div>'; });
+    out.innerHTML=html;
+  }
   var panel=document.createElement('div'); panel.id='glvPanel';
-  panel.innerHTML='<div><b>🍔 المطاعم</b> — مطاعم حول المحطتين الأقربتين وحول موقعك</div><button id="glvGo">🔄 تحديث</button><button id="glvRead">🔊 اقرأ</button><button id="glvStop" style="background:transparent;color:#fff">⏹</button><div id="glvOut"></div>';
+  panel.innerHTML='<div><b>🍔 المطاعم</b> — مطاعم حول المحطتين الأقربتين وحول موقعك</div><button id="glvGo">🔄 تحديث</button><button id="glvRead">🔊 اقرأ</button><button id="glvEnv">👁️ محيطي</button><button id="glvStop" style="background:transparent;color:#fff">⏹</button><div id="glvOut"></div>';
   document.body.appendChild(panel);
   var css=document.createElement('style'); css.textContent='#glvPanel{position:absolute;top:58px;right:10px;z-index:1000;width:min(380px,calc(100vw - 20px));max-height:72vh;overflow:auto;background:#0d1a6eF2;color:#fff;border:1px solid #d4af37;border-radius:12px;padding:10px;direction:rtl;font-size:13px;display:none}#glvPanel button{margin-top:6px;margin-inline-end:6px;padding:6px 12px;border-radius:8px;border:1px solid #d4af37;background:#d4af37;color:#0d1a6e;font-weight:800;cursor:pointer}'; document.head.appendChild(css);
   var btn=document.createElement('button'); btn.id='glvBtn'; btn.textContent='🍔'; btn.title='المطاعم';
@@ -2932,6 +3019,7 @@ if('serviceWorker' in navigator){
   var prgB=document.getElementById('prgBtn'); if(prgB){ var old=prgB.onclick; prgB.onclick=function(){ old&&old(); if(document.getElementById('prgPanel').style.display==='block') panel.style.display='none'; }; }
   document.getElementById('glvGo').onclick=function(){ refresh(true); };
   document.getElementById('glvRead').onclick=readAll;
+  document.getElementById('glvEnv').onclick=envRead;
   document.getElementById('glvStop').onclick=stopRead;
   window.__glv={refresh:refresh,places:places,cityOf:cityOf,readAll:readAll};
 })();
