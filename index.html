@@ -2775,7 +2775,7 @@ if('serviceWorker' in navigator){
     out.innerHTML='<div class="prgR">⏳ جارٍ جلب مطاعم Glovo…</div>';
     try{
       var ps=places(u), groups={}, order=[];
-      ps.forEach(function(p){ var c=cityOf(p.lat,p.lon); var k=c?c.c:'none'; if(!groups[k]){ groups[k]={city:c,labels:[],say:[]}; order.push(k);} groups[k].labels.push(p.label); if(p.say) groups[k].say.push(p.say); });
+      ps.forEach(function(p){ var c=cityOf(p.lat,p.lon); var k=c?c.c:'none'; if(!groups[k]){ groups[k]={city:c,labels:[],say:[],pts:[]}; order.push(k);} groups[k].pts.push({lat:p.lat,lon:p.lon}); groups[k].labels.push(p.label); if(p.say) groups[k].say.push(p.say); });
       var html='<div class="prgR"><b>📍 بين '+esc(ps[0].label)+' و'+esc(ps[1].label)+'</b></div>';
       state.groups=[];
       for(var i=0;i<order.length;i++){
@@ -2787,8 +2787,35 @@ if('serviceWorker' in navigator){
         }catch(e){ html+='<div class="prgE">'+esc(g.labels.join('، '))+' ('+esc(g.city.ar)+') : تعذّر جلب Glovo — '+esc(e.message||e)+'</div>'; }
       }
       out.innerHTML=html;
+      glvMap();
     }catch(e){ out.innerHTML='<div class="prgE">'+esc(e.message||e)+'</div>'; }
     state.busy=false;
+  }
+  /* وضع مطاعم Glovo على الخريطة: مطابقة الأسماء مع مطاعم OpenStreetMap القريبة */
+  var glvLayer=L.layerGroup().addTo(map);
+  function gnorm(t){ return String(t||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9\u0600-\u06ff]/g,''); }
+  async function glvMap(){
+    glvLayer.clearLayers(); var placed={}, total=0, ok=0, out=document.getElementById('glvOut');
+    for(var gi=0;gi<state.groups.length;gi++){
+      var g=state.groups[gi], pts=[], seen={};
+      g.pts.forEach(function(p){ var k=p.lat.toFixed(3)+','+p.lon.toFixed(3); if(!seen[k]){ seen[k]=1; pts.push(p); } });
+      total+=g.list.length;
+      var osm=[];
+      for(var pi=0;pi<pts.length;pi++){
+        try{
+          var els=await alaFetch('[out:json][timeout:25];nwr["name"]["amenity"~"^(restaurant|fast_food|cafe|food_court)$"](around:4000,'+pts[pi].lat+','+pts[pi].lon+');out center tags;');
+          els.forEach(function(el){ var la=el.lat!=null?el.lat:(el.center&&el.center.lat), ln=el.lon!=null?el.lon:(el.center&&el.center.lon); if(la!=null&&el.tags&&el.tags.name) osm.push({n:gnorm(el.tags.name),name:el.tags.name,lat:la,lon:ln}); });
+        }catch(e){}
+      }
+      g.list.forEach(function(r){
+        var n=gnorm(r.nom); if(n.length<3||placed[r.lien]) return;
+        var best=null; osm.forEach(function(o){ if(o.n&&(o.n===n||(n.length>=4&&o.n.indexOf(n)>=0)||(o.n.length>=4&&n.indexOf(o.n)>=0))){ if(!best) best=o; } });
+        if(!best) return;
+        placed[r.lien]=1; ok++;
+        L.marker([best.lat,best.lon],{icon:L.divIcon({className:'ala-poi',html:'🍔',iconSize:[24,24],iconAnchor:[12,12]}),zIndexOffset:300}).addTo(glvLayer).bindPopup('🍔 <a href="'+esc(r.lien)+'" target="_blank" rel="noopener">'+esc(r.nom)+'</a>');
+      });
+    }
+    if(out) out.insertAdjacentHTML('afterbegin','<div class="prgR">📍 '+ok+' / '+total+' على الخريطة</div>');
   }
   function say(txt,lang){ var s=window.speechSynthesis; if(!s) return; var u=new SpeechSynthesisUtterance(txt); u.lang=lang; u.rate=.95; s.speak(u); }
   function readAll(){
