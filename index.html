@@ -1172,16 +1172,49 @@ function alaRelease(key){
   st.pois.forEach(function(pk){ var o=alaPoi[pk]; if(!o) return; delete o.users[key]; if(!Object.keys(o.users).length){ alaLayer.removeLayer(o.m); delete alaPoi[pk]; } });
   st.pois=[];
 }
+/* ALA-MW-POPUP : fiche complète dans le popup, comme dans les apps صيدليتي / محطتي / صلاتي (nom, distance, bouton الخريطة، وللمسجد: الإقامة + الأذان + الجمعة) */
+(function(){ if(document.getElementById('ala-card-css')) return; var st=document.createElement('style'); st.id='ala-card-css';
+st.textContent='.ala-card{direction:rtl;min-width:230px;background:#0a1233;color:#f7f2df;border:1px solid rgba(255,229,102,.25);border-radius:12px;padding:10px 12px;font-family:inherit}'
++'.ala-top{display:flex;align-items:center;gap:10px}.ala-info{flex:1;min-width:0}.ala-name{font-size:13px;font-weight:700;color:#f7f2df}.ala-dist{font-size:11px;color:#ffd700;margin-top:2px}'
++'.ala-card a.ala-map{flex-shrink:0;padding:4px 8px;border-radius:7px;font-size:11px;font-weight:600;text-decoration:none;background:rgba(255,229,102,.10);color:#ffe566;border:1px solid rgba(255,229,102,.25);white-space:nowrap}'
++'.ala-mw{margin-top:8px;border-top:1px solid rgba(255,229,102,.12);padding-top:7px}.ala-mwl{font-size:9.5px;color:#b6c1ee;margin-bottom:5px}'
++'.ala-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}.ala-p{text-align:center}.ala-pn{font-size:9px;color:#b6c1ee;margin-bottom:1px}.ala-pt{font-size:11px;font-weight:700;color:#ffe566;font-variant-numeric:tabular-nums}'
++'.ala-p.cur .ala-pt,.ala-p.cur .ala-pn{color:#ffd700}.ala-pa{font-size:8px;color:#b6c1ee;opacity:.75;margin-top:1px;font-variant-numeric:tabular-nums}'
++'.ala-j{margin-top:6px;padding-top:5px;border-top:1px dashed rgba(255,229,102,.12);display:flex;justify-content:center;align-items:baseline;gap:6px;flex-wrap:wrap}.ala-jn{font-size:9.5px;color:#b6c1ee}.ala-jt{font-size:11px;font-weight:700;color:#ffe566}.ala-j.fri .ala-jn,.ala-j.cur .ala-jt{color:#ffd700}'
++'.ala-err{font-size:10px;color:rgba(224,96,96,.8);margin-top:8px}';
+document.head.appendChild(st); })();
+function alaTM(t){ if(!t||typeof t!=='string'||t.indexOf(':')<0) return null; var a=t.split(':').map(Number); return (isNaN(a[0])||isNaN(a[1]))?null:a[0]*60+a[1]; }
+function alaAppCard(best,c){
+  var h='<div class="ala-card"><div class="ala-top"><div class="ala-info"><div class="ala-name">'+c.e+' '+esc(best.name)+'</div><div class="ala-dist">📍 '+fmtD(best.d)+' · '+esc(c.ar)+'</div></div>'
+    +'<a class="ala-map" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query='+best.la+'%2C'+best.ln+'">الخريطة 📍</a></div>';
+  var m=best.mw;
+  if(m===false) h+='<div class="ala-err">لم يتم العثور على مواقيت لهذا المسجد</div>';
+  else if(m){
+    var names=['الفجر','الظهر','العصر','المغرب','العشاء'], now=new Date(), nm=now.getHours()*60+now.getMinutes(), act=-1, i;
+    for(i=m.iqama.length-1;i>=0;i--){ var x=alaTM(m.iqama[i]); if(x!==null&&nm>=x){ act=i; break; } }
+    h+='<div class="ala-mw"><div class="ala-mwl">🕌 وقت الإقامة</div><div class="ala-grid">';
+    for(i=0;i<m.adhan.length&&i<5;i++){
+      h+='<div class="ala-p'+(i===act?' cur':'')+'"><div class="ala-pn">'+names[i]+'</div><div class="ala-pt">'+esc(m.iqama[i]||'—')+'</div>'+(m.adhan[i]?'<div class="ala-pa">أذان '+esc(m.adhan[i])+'</div>':'')+'</div>';
+    }
+    h+='</div>';
+    if(m.jumua&&m.jumua.length){
+      var fri=now.getDay()===5, jc='ala-j'+(fri?' fri':'')+(fri&&act===1?' cur':'');
+      h+='<div class="'+jc+'"><span class="ala-jn">🕌 صلاة الجمعة</span><span class="ala-jt">'+esc(m.jumua.join(' · '))+'</span></div>';
+    }
+    h+='</div>';
+  }
+  return h+'</div>';
+}
 function alaAdd(key,u,c,els){
   var best=null, st=alaState[key]; if(!st) return 0;
   els.forEach(function(el){
     var la=el.lat!=null?el.lat:(el.center&&el.center.lat), ln=el.lon!=null?el.lon:(el.center&&el.center.lon);
     if(la==null) return;
     var d=QT.haversine([u.lat,u.lon],[la,ln]);
-    if(!best||d<best.d) best={d:d,la:la,ln:ln,id:el.type+el.id,name:(el.tags&&el.tags.name)||c.ar};
+    if(!best||d<best.d) best={d:d,la:la,ln:ln,id:el.type+el.id,name:(el.tags&&el.tags.name)||c.ar,mw:el.mw,app:el.app};
   });
   if(!best) return 0;
-  var pk=best.id+'|'+c.ar, o=alaPoi[pk], tip=c.e+' '+esc(best.name)+'<br>'+esc(c.ar)+' · '+fmtD(best.d);
+  var pk=best.id+'|'+c.ar, o=alaPoi[pk], tip=best.app?alaAppCard(best,c):(c.e+' '+esc(best.name)+'<br>'+esc(c.ar)+' · '+fmtD(best.d));
   if(!o){
     var m=L.marker([best.la,best.ln],{icon:L.divIcon({className:'ala-poi',html:c.e,iconSize:[24,24],iconAnchor:[12,12]}),zIndexOffset:200}).addTo(alaLayer).bindPopup(tip);
     o=alaPoi[pk]={m:m,users:{}};
@@ -1343,7 +1376,7 @@ async function alaWork(){
       var appRes=await Promise.all(viaApps.map(function(c){ return alaAskApp(c,u).catch(function(){ return null; }); }));
       viaApps.forEach(function(c,i){
         var poi=appRes[i];
-        if(poi&&alaState[key]&&alaAdd(key,u,c,[{type:'n',id:poi.lat+','+poi.lng,lat:poi.lat,lon:poi.lng,tags:{name:poi.name}}])) found++;
+        if(poi&&alaState[key]&&alaAdd(key,u,c,[{type:'n',id:poi.lat+','+poi.lng,lat:poi.lat,lon:poi.lng,tags:{name:poi.name},app:true,mw:(c.ar==='جامع'&&poi.mawaqit!==undefined)?(poi.mawaqit||false):undefined}])) found++;
       });
     }
     var stages=[1500,5000,18000];
