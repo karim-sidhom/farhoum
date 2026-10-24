@@ -35,6 +35,7 @@ html,body{margin:0;height:100%;background:#0d1a6e;font-family:system-ui,sans-ser
 @keyframes pwaUp{from{opacity:0;transform:translate(-50%,20px)}to{opacity:1;transform:translate(-50%,0)}}
 
 .ala-poi{font-size:18px;line-height:24px;text-align:center;background:#fff;border:2px solid #1fb35a;border-radius:50%;box-shadow:0 1px 4px #0008}
+.ala-poi.pray{background:#2ee66b;border-color:#0b8a3a;box-shadow:0 0 0 3px #2ee66b66,0 0 14px 6px #2ee66bcc;animation:alaPray 1.6s ease-in-out infinite}@keyframes alaPray{50%{box-shadow:0 0 0 6px #2ee66b44,0 0 22px 10px #2ee66b99}}
 .rc{width:38px;height:38px;border-radius:50%;border:3px solid #fff;color:#fff;font:700 12px/32px system-ui,sans-serif;text-align:center;box-shadow:0 1px 5px #000a}
 .rc.g{background:#1fb35a}.rc.o{background:#f39c12}.rc.r{background:#e02424;animation:rp 1s infinite}
 .rc.stale{opacity:.55}
@@ -53,16 +54,6 @@ html,body{margin:0;height:100%;background:#0d1a6e;font-family:system-ui,sans-ser
 </style>
 </head>
 <body>
-<div id="gate"><div class="box"><div style="font-size:18px;font-weight:700;color:#d4af37">🔒 كلمة المرور</div><input id="gpw" type="password" autocomplete="off" autofocus><button id="gbtn">دخول</button><div class="err" id="gerr"></div></div></div>
-<script>
-(function(){
-var g=document.getElementById('gate'),i=document.getElementById('gpw'),e=document.getElementById('gerr');
-function go(){ if(i.value.trim()==='LORD'){ g.style.display='none'; } else { e.textContent='❌ كلمة المرور خاطئة'; i.value=''; i.focus(); } }
-document.getElementById('gbtn').onclick=go;
-i.addEventListener('keydown',function(ev){ if(ev.key==='Enter') go(); });
-})();
-</script>
-
 <div id="map"></div>
 <div id="risk" class="risk-panel" style="display:none"></div>
 <div id="pwaBox"><img src="icons/icon-192.png" alt=""><span id="pwaTxt">ثبّت خريطة قطاري على جهازك</span><button id="pwaInstall">تثبيت</button><button id="pwaClose" aria-label="إغلاق">✕</button></div>
@@ -1221,6 +1212,31 @@ function alaAppCard(best,c){
   }
   return h+'</div>';
 }
+/* ALA-PRAY : المساجد تضيء بالأخضر وقت الصلاة (من الأذان إلى الإقامة + ALA_PRAY_AFTER دقيقة) */
+var ALA_PRAY_AFTER=20, alaMosques=[];
+function alaPrayNow(mw){
+  if(!mw||!mw.adhan) return false;
+  var now=new Date(), nm=now.getHours()*60+now.getMinutes();
+  for(var i=0;i<mw.adhan.length&&i<5;i++){
+    var a=alaTM(mw.adhan[i]), q=alaTM(mw.iqama&&mw.iqama[i]);
+    if(a===null) continue;
+    var end=(q!==null?q:a)+ALA_PRAY_AFTER;
+    if(nm>=a&&nm<=end) return true;
+  }
+  return false;
+}
+function alaMosqueReg(m,mw){
+  for(var i=0;i<alaMosques.length;i++) if(alaMosques[i].m===m){ alaMosques[i].mw=mw; alaMosqueTick(); return; }
+  alaMosques.push({m:m,mw:mw}); alaMosqueTick();
+}
+function alaMosqueTick(){
+  alaMosques=alaMosques.filter(function(o){ return alaLayer.hasLayer(o.m); });
+  alaMosques.forEach(function(o){
+    var el=o.m.getElement&&o.m.getElement(); if(!el) return;
+    if(alaPrayNow(o.mw)) el.classList.add('pray'); else el.classList.remove('pray');
+  });
+}
+setInterval(alaMosqueTick,30000);
 function alaAdd(key,u,c,els){
   var best=null, st=alaState[key]; if(!st) return 0;
   els.forEach(function(el){
@@ -1235,6 +1251,7 @@ function alaAdd(key,u,c,els){
     var m=L.marker([best.la,best.ln],{icon:L.divIcon({className:'ala-poi',html:c.e,iconSize:[24,24],iconAnchor:[12,12]}),zIndexOffset:200}).addTo(alaLayer).bindPopup(tip);
     o=alaPoi[pk]={m:m,users:{}};
   } else o.m.setPopupContent(tip);
+  if(c.ar==='جامع'&&best.app&&best.mw) alaMosqueReg(o.m,best.mw);
   o.users[key]=1; st.pois.push(pk); (st.found=st.found||[]).push({ar:c.ar,id:best.id,lat:best.la,lon:best.ln,name:best.name}); return 1;
 }
 var ALA_EP=['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter','https://overpass.private.coffee/api/interpreter'], alaEp=0;
@@ -1271,6 +1288,19 @@ function alaQMulti(cats,lat,lon,r){
   var parts=cats.map(function(c){ return 'node["'+c.k+'"="'+c.v+'"]'+(c.x?'["'+c.x[0]+'"="'+c.x[1]+'"]':'')+'(around:'+r+','+lat+','+lon+');'; });
   return '[out:json][timeout:25];('+parts.join('')+');out body;';
 }
+/* QITARI-CACHÉ : au lancement de Farhoum, Qitari se lance avec lui dans un iframe invisible (1px, hors écran), actif en arrière-plan */
+(function(){
+  try{ if(window.self!==window.top) return; }catch(e){ return; }
+  function boot(){
+    if(document.getElementById('qitariHidden')) return;
+    var f=document.createElement('iframe'); f.id='qitariHidden'; f.src='https://quitari.kieda.online/';
+    f.setAttribute('allow','geolocation; autoplay; accelerometer; gyroscope; microphone');
+    f.setAttribute('aria-hidden','true'); f.tabIndex=-1;
+    f.style.cssText='position:fixed;left:-9999px;top:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none';
+    document.body.appendChild(f);
+  }
+  if(document.body) boot(); else document.addEventListener('DOMContentLoaded',boot);
+})();
 var ALA_LAMP='https://alaiddine.kieda.online', alaReady=false, alaAsk_={}, alaSeq=0;
 (function(){
   var f=document.createElement('iframe'); f.id='alaLamp'; f.src=ALA_LAMP+'/?bridge=1'; f.setAttribute('allow','geolocation');
@@ -2447,6 +2477,21 @@ function alaStatRelease(key){
   st.pks.forEach(function(pk){ var o=alaStatPoi[pk]; if(!o) return; delete o.users[key]; if(!Object.keys(o.users).length){ alaLayer.removeLayer(o.m); delete alaStatPoi[pk]; } });
   delete alaStatUser[key];
 }
+function alaStatMosque(m,h,c,stn){
+  /* جامع ثابت: عند الضغط نطلب المواقيت من تطبيق صلاتي (الأذان + الإقامة)، ثم يضيء بالأخضر وقت الصلاة */
+  var loading=false, done=false;
+  function load(){
+    if(done||loading) return; loading=true;
+    m.setPopupContent(c.e+' '+esc(h.name)+'<br>⏳ جارٍ جلب مواقيت الصلاة…');
+    alaAskApp(c,{lat:h.lat,lon:h.lon}).then(function(poi){
+      loading=false;
+      var mw=poi&&poi.mawaqit?poi.mawaqit:false;
+      m.setPopupContent(alaAppCard({name:h.name,d:(function(r){ return QT.haversine([h.lat,h.lon],[r.lat,r.lon]); })(window.__glvRef||{lat:h.lat,lon:h.lon}),la:h.lat,ln:h.lon,mw:mw},c));
+      if(mw){ done=true; alaMosqueReg(m,mw); }
+    }).catch(function(){ loading=false; m.setPopupContent(c.e+' '+esc(h.name)+'<br>'+esc(c.ar)+' · قرب محطة '+esc(stn)+'<br>تعذّر جلب المواقيت'); });
+  }
+  m.on('popupopen',load);
+}
 function alaStatSync(key,u){
   var two=alaStatNearest2(u), pair=two.map(function(x){ return x.n; }).join('|');
   var st=alaStatUser[key];
@@ -2462,6 +2507,7 @@ function alaStatSync(key,u){
       if(!o){
         var m=L.marker([h.lat,h.lon],{icon:L.divIcon({className:'ala-poi',html:c.e,iconSize:[24,24],iconAnchor:[12,12]}),zIndexOffset:150}).addTo(alaLayer).bindPopup(tip);
         o=alaStatPoi[pk]={m:m,users:{}};
+        if(cid==='mosque') alaStatMosque(m,h,c,x.n);
       }
       o.users[key]=1; st.pks.push(pk);
     });
@@ -3232,7 +3278,12 @@ if('serviceWorker' in navigator){
     var ta=advTok(a), tb=advTok(b); if(!ta.length||!tb.length) return false;
     return ta.some(function(w){ return w.length>=4&&tb.indexOf(w)>=0; })||(ta.length>=2&&ta.every(function(w){ return tb.indexOf(w)>=0; }));
   }
-  function advGps(la,lo){ return (la!=null&&lo!=null)?'<a href="https://www.google.com/maps/search/?api=1&query='+la+','+lo+'" target="_blank" rel="noopener" title="GPS" style="text-decoration:none">📍</a> ':''; }
+  function advGps(la,lo,nom,ville){
+    /* نقطة GPS لكل مطعم: الإحداثيات إن وُجدت، وإلا بحث خرائط غوغل بالاسم + المدينة */
+    var q=(la!=null&&lo!=null)?(la+','+lo):((nom?String(nom):'')+(ville?' '+String(ville):'')).trim();
+    if(!q) return '';
+    return '<a href="https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(q)+'" target="_blank" rel="noopener" title="GPS" style="text-decoration:none">'+((la!=null&&lo!=null)?'📍':'📍?')+'</a> ';
+  }
   /* worker restos-tn : GPS de tous les restaurants / fast-foods (OpenStreetMap) autour de la zone */
   var WR='https://spring-bonus-c1ea.lordsidhom78.workers.dev', osmLayer=L.layerGroup().addTo(map);
   var osmMem={};
@@ -3314,7 +3365,7 @@ if('serviceWorker' in navigator){
       var sp=[];
       top.forEach(function(t,ix){
         var show=t.dishes.slice(0,3);
-        html+='<div class="prgR"><b>'+(ix+1)+'. '+advGps(t.z.lat,t.z.lon)+esc(t.z.r.nom)+'</b> '+advMenuLnk(t.z.r.lien,city.slug,t.z.r.nom)+' · '+(t.z.lat!=null?Math.round(t.d)+' م':'📍 الموقع غير معروف')+(t.hits?' ✅':'')+'<br>'+show.map(function(d){ return '• '+esc(d.nom)+' — <b>'+d.prix+' DT</b>'; }).join('<br>')+'</div>';
+        html+='<div class="prgR"><b>'+(ix+1)+'. '+advGps(t.z.lat,t.z.lon,t.z.r.nom,city.slug)+esc(t.z.r.nom)+'</b> '+advMenuLnk(t.z.r.lien,city.slug,t.z.r.nom)+' · '+(t.z.lat!=null?Math.round(t.d)+' م':'📍 الموقع غير معروف')+(t.hits?' ✅':'')+'<br>'+show.map(function(d){ return '• '+esc(d.nom)+' — <b>'+d.prix+' DT</b>'; }).join('<br>')+'</div>';
         if(t.z.lat!=null) L.marker([t.z.lat,t.z.lon],{icon:L.divIcon({className:'ala-poi',html:'<b style="background:#d4af37;color:#0d1a6e;border-radius:50%;padding:2px 7px">'+(ix+1)+'</b>',iconSize:[26,26],iconAnchor:[13,13]}),zIndexOffset:600}).addTo(advLayer).bindPopup('🧞 <b>'+esc(t.z.r.nom)+'</b><br>'+show.map(function(d){return esc(d.nom)+' — '+d.prix+' DT';}).join('<br>')+'<br>'+advMenuLnk(t.z.r.lien,city.slug,t.z.r.nom)+advInfo(t.z.lat,t.z.lon,t.z.r.lien,city.slug));
         sp.push({n:t.z.r.nom,d:show});
       });
@@ -3400,7 +3451,7 @@ if('serviceWorker' in navigator){
       rows.sort(function(a,b){ return a.prix-b.prix||a.resto.localeCompare(b.resto); });
       var html='<div class="prgR"><b>🔎 «'+esc(document.getElementById('glvQ').value)+'» : '+rows.length+' طبق في '+new Set(rows.map(function(r){return r.resto;})).size+' مطعم</b> · قوائم مقروءة: '+nMenu+'/'+zone.length+(bud?' · ≤ '+bud+' DT':'')+'</div>';
       if(!rows.length) html+='<div class="prgE">ما لقيت حتى طبق بهذا الاسم.</div>';
-      html+=rows.map(function(r){ return '<div class="prgR">'+advGps(r.lat,r.lon)+'<b>'+esc(r.resto)+'</b> '+advMenuLnk(r.lien,r.ville,r.resto)+' — '+esc(r.nom)+' — <b>'+r.prix+' DT</b>'+(r.d!=null?' · '+Math.round(r.d)+' م':'')+'</div>'; }).join('');
+      html+=rows.map(function(r){ return '<div class="prgR">'+advGps(r.lat,r.lon,r.resto,r.ville)+'<b>'+esc(r.resto)+'</b> '+advMenuLnk(r.lien,r.ville,r.resto)+' — '+esc(r.nom)+' — <b>'+r.prix+' DT</b>'+(r.d!=null?' · '+Math.round(r.d)+' م':'')+'</div>'; }).join('');
       out.innerHTML=html;
       advLayer.clearLayers(); var seenR={};
       rows.forEach(function(r){
