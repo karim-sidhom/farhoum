@@ -3009,8 +3009,118 @@ if('serviceWorker' in navigator){
     errs.forEach(function(x){ html+='<div class="prgE">'+esc(x)+'</div>'; });
     out.innerHTML=html;
   }
+  /* ===== 🧞 مستشار فرحوم: يسأل عن البرنامج والميزانية، يقرأ كل القوائم ويقترح المطاعم والأطباق داخل المنطقة ===== */
+  var advLayer=L.layerGroup().addTo(map), advC=null, advCircle=null, advBusy=false, advPick=false;
+  var SYN=[
+    [['pizza','بيتزا','بيتسا','margherita'],['pizza','بيتزا','margherita','calzone']],
+    [['sandwich','ساندويتش','سندويتش','سندويش','كسرة','kosksi'],['sandwich','tacos','panini','baguette','ساندويتش','chawarma','shawarma','kebab']],
+    [['burger','برجر','هامبرجر','hamburger'],['burger','برجر','cheese','chicken burger']],
+    [['tacos','تاكوس'],['tacos']],
+    [['chawarma','shawarma','شاورما'],['chawarma','shawarma','شاورما']],
+    [['pasta','معكرونة','مكرونة','makarouna','spaghetti','pates'],['pasta','pates','spaghetti','penne','lasagne','tagliatelle','carbonara']],
+    [['salade','سلطة','salad'],['salade','salad','سلطة']],
+    [['poulet','دجاج','فراخ','chicken','مقلي','frit'],['poulet','chicken','nuggets','دجاج','crispy','escalope']],
+    [['poisson','حوت','سمك','fish','fruits de mer'],['poisson','fish','crevette','calamar','dorade','loup','حوت']],
+    [['dessert','حلو','حلويات','crepe','كريب','gaufre','glace','gateau'],['dessert','crepe','gaufre','glace','gateau','tiramisu','cheesecake','brownie','crêpe']],
+    [['petit dej','فطور','breakfast','صباح','brunch'],['petit','breakfast','omelette','croissant','brunch','فطور']],
+    [['cafe','قهوة','coffee','كافي','boisson','مشروب','jus','عصير','drink'],['cafe','café','coffee','capuccino','cappuccino','jus','boisson','smoothie','mojito','thé','the ']],
+    [['sushi','سوشي'],['sushi','maki','california','sashimi']],
+    [['healthy','دايت','diet','صحي','bowl'],['bowl','salade','healthy','poke','wrap','grille']],
+    [['viande','لحم','grillade','مشوي','grill','mixed grill','كباب','kebab'],['grill','grillade','viande','kebab','brochette','steak','mechoui','côte','cote']],
+    [['couscous','كسكسي','tunisien','تونسي','ma9loub','lablabi','ojja','عجة','لبلابي'],['couscous','ojja','lablabi','brik','tajine','ma9loub','عجة','كسكسي']]
+  ];
+  function advNorm(t){ return String(t||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase(); }
+  function advKeys(prog){
+    var t=advNorm(prog), keys=[], seen={};
+    SYN.forEach(function(s){ if(s[0].some(function(w){ return t.indexOf(advNorm(w))>=0; })) s[1].forEach(function(k){ k=advNorm(k); if(!seen[k]){ seen[k]=1; keys.push(k); } }); });
+    t.split(/[^a-z0-9؀-ۿ]+/).forEach(function(w){ if(w.length>=4&&!seen[w]&&!/^\d+$/.test(w)){ seen[w]=1; keys.push(w); } });
+    return keys;
+  }
+  function advBudget(){
+    var v=parseFloat(String(document.getElementById('glvBud').value).replace(',','.'));
+    if(isFinite(v)&&v>0) return v;
+    var m=/(\d+(?:[.,]\d+)?)\s*(?:dt|dinars?|دينار|د\b|tnd)/i.exec(document.getElementById('glvProg').value)||/(?:budget|ميزانية\w*|بميزانية)\D{0,12}(\d+(?:[.,]\d+)?)/i.exec(document.getElementById('glvProg').value);
+    return m?parseFloat(m[1].replace(',','.')):null;
+  }
+  function advSetC(la,lo){
+    advC={lat:la,lon:lo}; var rad=parseFloat(document.getElementById('glvRad').value)*1000;
+    if(advCircle) map.removeLayer(advCircle);
+    advCircle=L.circle([la,lo],{radius:rad,color:'#d4af37',weight:2,fillOpacity:.06}).addTo(map);
+  }
+  function advAsk(){ stopRead(); say('شنيّة برنامجك اليوم؟ وكم ميزانيتك؟','ar-SA'); }
+  async function advRun(){
+    if(advBusy) return; var out=document.getElementById('glvAdvOut');
+    var prog=document.getElementById('glvProg').value.trim(), bud=advBudget();
+    if(!prog&&!bud){ out.innerHTML='<div class="prgE">اكتب برنامجك وميزانيتك أولاً (أو اضغط 🎤).</div>'; advAsk(); return; }
+    if(!advC){ var u=window.__glvRef; if(u) advSetC(u.lat,u.lon); else { var c0=map.getCenter(); advSetC(c0.lat,c0.lng); } }
+    advBusy=true; stopRead(); var id=readId;
+    var radius=parseFloat(document.getElementById('glvRad').value)*1000, keys=advKeys(prog);
+    advLayer.clearLayers();
+    try{
+      var city=cityOf(advC.lat,advC.lon);
+      if(!city){ out.innerHTML='<div class="prgE">المنطقة خارج المدن المغطاة (أبعد من 60 كم).</div>'; advBusy=false; return; }
+      out.innerHTML='<div class="prgR">⏳ فرحوم يحدّد المطاعم في المنطقة…</div>';
+      var list=await fetchCity(city), inZone=[];
+      for(var i=0;i<list.length;i+=6){
+        var part=list.slice(i,i+6), geos=await Promise.all(part.map(function(r){ return glvGeo(r,city); }));
+        geos.forEach(function(gp,k){ if(gp&&gp.lat!=null&&QT.haversine([advC.lat,advC.lon],[gp.lat,gp.lon])<=radius) inZone.push({r:part[k],lat:gp.lat,lon:gp.lon}); });
+      }
+      var dins=[]; try{ (await dinLoad()).forEach(function(d){ if(QT.haversine([advC.lat,advC.lon],[d.lat,d.lon])<=radius) dins.push(d); }); }catch(e){}
+      var done=0;
+      out.innerHTML='<div class="prgR">⏳ فرحوم يقرأ '+inZone.length+' قائمة…</div>';
+      for(var j=0;j<inZone.length;j+=4){
+        if(id!==readId) { advBusy=false; return; }
+        await Promise.all(inZone.slice(j,j+4).map(async function(z){
+          var m=/\/stores\/([^/?#]+)/.exec(z.r.lien||''); z.plats=[];
+          if(!m) return;
+          try{ var res=await fetch(W+'/menu?slug='+encodeURIComponent(m[1])+'&ville='+encodeURIComponent(city.slug)); if(res.ok){ var jj=await res.json(); z.plats=(jj&&jj.plats)||[]; } }catch(e){}
+          done++;
+        }));
+      }
+      var res2=[];
+      inZone.forEach(function(z){
+        var rn=advNorm(z.r.nom), rk=keys.filter(function(k){ return rn.indexOf(k)>=0; }).length, dishes=[];
+        z.plats.forEach(function(p){
+          var pr=Number(p.prix); if(!isFinite(pr)||pr<=0) return; if(bud&&pr>bud) return;
+          var tx=advNorm((p.nom||'')+' '+(p.categorie||'')), sc=0; keys.forEach(function(k){ if(tx.indexOf(k)>=0) sc++; });
+          dishes.push({nom:p.nom,prix:pr,cat:p.categorie||'',sc:sc});
+        });
+        if(!dishes.length) return;
+        dishes.sort(function(a,b){ return b.sc-a.sc||b.prix-a.prix; });
+        var hits=dishes.filter(function(d){return d.sc>0;}).length;
+        var score=(keys.length?hits*3+rk*2:0)+Math.min(dishes.length,10)/10;
+        if(keys.length&&!hits&&!rk) score-=5;
+        res2.push({z:z,dishes:dishes,hits:hits,score:score,d:QT.haversine([advC.lat,advC.lon],[z.lat,z.lon])});
+      });
+      res2.sort(function(a,b){ return b.score-a.score||a.d-b.d; });
+      var top=res2.slice(0,5), html='<div class="prgR"><b>🧞 '+inZone.length+' مطعم في المنطقة — قرأت '+done+' قائمة</b>'+(bud?' · الميزانية ≤ '+bud+' DT':'')+(keys.length?'':' · بلا تفضيل محدّد')+'</div>';
+      if(!top.length) html+='<div class="prgE">ما لقيت أطباق مناسبة للميزانية في هذه المنطقة. جرّب نصف قطر أكبر أو ميزانية أعلى.</div>';
+      var sp=[];
+      top.forEach(function(t,ix){
+        var show=t.dishes.slice(0,3);
+        html+='<div class="prgR"><b>'+(ix+1)+'. <a href="'+esc(t.z.r.lien)+'" target="_blank" rel="noopener" style="color:#ffd966">'+esc(t.z.r.nom)+'</a></b> · '+Math.round(t.d)+' م'+(t.hits?' ✅':'')+'<br>'+show.map(function(d){ return '• '+esc(d.nom)+' — <b>'+d.prix+' DT</b>'; }).join('<br>')+'</div>';
+        L.marker([t.z.lat,t.z.lon],{icon:L.divIcon({className:'ala-poi',html:'<b style="background:#d4af37;color:#0d1a6e;border-radius:50%;padding:2px 7px">'+(ix+1)+'</b>',iconSize:[26,26],iconAnchor:[13,13]}),zIndexOffset:600}).addTo(advLayer).bindPopup('🧞 '+esc(t.z.r.nom)+'<br>'+show.map(function(d){return esc(d.nom)+' — '+d.prix+' DT';}).join('<br>'));
+        sp.push({n:t.z.r.nom,d:show});
+      });
+      if(dins.length) html+='<div class="prgR">🍽️ مطاعم Dinner في المنطقة (بدون قائمة): '+dins.slice(0,8).map(function(d){ return esc(d.nom); }).join(' · ')+'</div>';
+      out.innerHTML=html;
+      if(id===readId){
+        if(!sp.length) say('ما لقيتش أطباق مناسبة في هذه المنطقة','ar-SA');
+        else { say('هذا اللي يناسبك'+(bud?' بميزانية '+bud+' دينار':''),'ar-SA'); sp.forEach(function(s,ix){ say('المطعم '+(ix+1),'ar-SA'); say(s.n,'fr-FR'); say(s.d.map(function(d){return d.nom+', '+d.prix+' dinars';}).join('. '),'fr-FR'); }); }
+      }
+    }catch(e){ out.innerHTML='<div class="prgE">'+esc(e.message||e)+'</div>'; }
+    advBusy=false;
+  }
+  function advMic(){
+    var SR=window.SpeechRecognition||window.webkitSpeechRecognition, out=document.getElementById('glvAdvOut');
+    if(!SR){ out.innerHTML='<div class="prgE">الميكروفون غير مدعوم في هذا المتصفح — اكتب برنامجك.</div>'; return; }
+    stopRead(); var r=new SR(); r.lang='ar-TN'; r.interimResults=false;
+    r.onresult=function(e){ var t=e.results[0][0].transcript, a=document.getElementById('glvProg'); a.value=(a.value?a.value+' ':'')+t; var b=advBudget(); if(b&&!document.getElementById('glvBud').value) document.getElementById('glvBud').value=b; };
+    r.onerror=function(e){ out.innerHTML='<div class="prgE">🎤 '+esc(e.error||'خطأ')+'</div>'; };
+    try{ r.start(); }catch(e){}
+  }
   var panel=document.createElement('div'); panel.id='glvPanel';
-  panel.innerHTML='<div><b>🍔 المطاعم</b> — مطاعم حول المحطتين الأقربتين وحول موقعك</div><button id="glvGo">🔄 تحديث</button><button id="glvRead">🔊 اقرأ</button><button id="glvEnv">👁️ محيطي</button><button id="glvStop" style="background:transparent;color:#fff">⏹</button><div id="glvOut"></div>';
+  panel.innerHTML='<div><b>🍔 المطاعم</b> — مطاعم حول المحطتين الأقربتين وحول موقعك</div><button id="glvGo">🔄 تحديث</button><button id="glvRead">🔊 اقرأ</button><button id="glvEnv">👁️ محيطي</button><button id="glvStop" style="background:transparent;color:#fff">⏹</button><div id="glvAdv" style="margin-top:8px;border-top:1px solid #d4af3755;padding-top:8px"><b>🧞 مستشار فرحوم</b> — قلّي برنامجك وميزانيتك ونقترح عليك المطاعم والأطباق<textarea id="glvProg" rows="2" placeholder="برنامجي: مثلاً نتغدى بيتزا أو ساندويتش قبل القطار / déjeuner rapide" style="width:100%;box-sizing:border-box;margin-top:6px;border-radius:8px;padding:6px;direction:rtl"></textarea><div style="display:flex;gap:6px;margin-top:4px"><input id="glvBud" type="number" min="1" step="0.5" placeholder="الميزانية DT" style="flex:1;border-radius:8px;padding:6px"><select id="glvRad" style="border-radius:8px;padding:6px"><option value="1">1 كم</option><option value="3" selected>3 كم</option><option value="5">5 كم</option></select></div><button id="glvZone">📍 حدّد المنطقة</button><button id="glvMic">🎤</button><button id="glvSug">🍽️ اقترح</button><div id="glvAdvOut"></div></div><div id="glvOut"></div>';
   document.body.appendChild(panel);
   var css=document.createElement('style'); css.textContent='#glvPanel{position:absolute;top:58px;right:10px;z-index:1000;width:min(380px,calc(100vw - 20px));max-height:72vh;overflow:auto;background:#0d1a6eF2;color:#fff;border:1px solid #d4af37;border-radius:12px;padding:10px;direction:rtl;font-size:13px;display:none}#glvPanel button{margin-top:6px;margin-inline-end:6px;padding:6px 12px;border-radius:8px;border:1px solid #d4af37;background:#d4af37;color:#0d1a6e;font-weight:800;cursor:pointer}'; document.head.appendChild(css);
   var btn=document.createElement('button'); btn.id='glvBtn'; btn.textContent='🍔'; btn.title='المطاعم';
@@ -3021,7 +3131,15 @@ if('serviceWorker' in navigator){
   document.getElementById('glvRead').onclick=readAll;
   document.getElementById('glvEnv').onclick=envRead;
   document.getElementById('glvStop').onclick=stopRead;
-  window.__glv={refresh:refresh,places:places,cityOf:cityOf,readAll:readAll};
+  document.getElementById('glvSug').onclick=advRun;
+  document.getElementById('glvMic').onclick=advMic;
+  document.getElementById('glvZone').onclick=function(){
+    var o=document.getElementById('glvAdvOut'); o.innerHTML='<div class="prgR">📍 اضغط على الخريطة لتحديد مركز المنطقة…</div>'; advPick=true;
+    map.once('click',function(e){ advPick=false; advSetC(e.latlng.lat,e.latlng.lng); o.innerHTML='<div class="prgR">✅ تمّ تحديد المنطقة.</div>'; });
+  };
+  document.getElementById('glvRad').onchange=function(){ if(advC) advSetC(advC.lat,advC.lon); };
+  btn.addEventListener('click',function(){ if(panel.style.display==='block') advAsk(); });
+  window.__glv={refresh:refresh,places:places,cityOf:cityOf,readAll:readAll,advise:advRun,advKeys:advKeys};
 })();
 </script>
 </body>
