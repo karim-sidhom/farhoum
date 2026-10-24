@@ -2882,14 +2882,45 @@ if('serviceWorker' in navigator){
     }catch(e){ if(out) out.insertAdjacentHTML('afterbegin','<div class="prgE">🍽️ '+esc(e.message||e)+'</div>'); }
   }
   function say(txt,lang){ var s=window.speechSynthesis; if(!s) return; var u=new SpeechSynthesisUtterance(txt); u.lang=lang; u.rate=.95; s.speak(u); }
+  var readId=0;
+  function stopRead(){ readId++; try{ window.speechSynthesis.cancel(); }catch(e){} }
+  /* قراءة قائمة (menu) كل مطعم من Glovo: الأطباق وأسعارها حسب الصنف */
+  async function readMenus(id){
+    for(var gi=0;gi<state.groups.length;gi++){
+      var g=state.groups[gi];
+      for(var ri=0;ri<g.list.length;ri++){
+        if(id!==readId) return;
+        var r=g.list[ri], m=/\/stores\/([^/?#]+)/.exec(r.lien||''); if(!m) continue;
+        var j=null;
+        try{ var res=await fetch(W+'/menu?slug='+encodeURIComponent(m[1])+'&ville='+encodeURIComponent(g.city.slug)); if(res.ok) j=await res.json(); }catch(e){}
+        if(id!==readId) return;
+        say('قائمة '+r.nom,'ar-SA');
+        var plats=(j&&j.plats)||[];
+        if(!plats.length){ say('القائمة غير متوفرة','ar-SA'); continue; }
+        var cats=[], byCat={};
+        plats.forEach(function(p){ var c=p.categorie||''; if(!byCat[c]){ byCat[c]=[]; cats.push(c); } byCat[c].push(p); });
+        cats.forEach(function(c){
+          if(c) say(c,'fr-FR');
+          var chunk='';
+          byCat[c].forEach(function(p){
+            var t=p.nom+(p.prix!=null?', '+p.prix+' dinars':'')+'. ';
+            if(chunk.length+t.length>180){ say(chunk,'fr-FR'); chunk=''; }
+            chunk+=t;
+          });
+          if(chunk) say(chunk,'fr-FR');
+        });
+      }
+    }
+  }
   function readAll(){
-    var s=window.speechSynthesis; if(!s){ return; } s.cancel();
+    var s=window.speechSynthesis; if(!s){ return; } s.cancel(); var id=++readId;
     state.groups.forEach(function(g){
       say('قرب '+g.labels.map(function(l){return l.replace(/^محطة /,'محطة ');}).join(' و')+'، في '+g.city.ar,'ar-SA');
       g.say.forEach(function(n){ say(n,'fr-FR'); });
       say('المطاعم المتوفرة','ar-SA');
       say(g.list.slice(0,10).map(function(x){return x.nom;}).join(', '),'fr-FR');
     });
+    readMenus(id);
   }
   var panel=document.createElement('div'); panel.id='glvPanel';
   panel.innerHTML='<div><b>🍔 المطاعم</b> — مطاعم حول المحطتين الأقربتين وحول موقعك</div><button id="glvGo">🔄 تحديث</button><button id="glvRead">🔊 اقرأ</button><button id="glvStop" style="background:transparent;color:#fff">⏹</button><div id="glvOut"></div>';
@@ -2901,7 +2932,7 @@ if('serviceWorker' in navigator){
   var prgB=document.getElementById('prgBtn'); if(prgB){ var old=prgB.onclick; prgB.onclick=function(){ old&&old(); if(document.getElementById('prgPanel').style.display==='block') panel.style.display='none'; }; }
   document.getElementById('glvGo').onclick=function(){ refresh(true); };
   document.getElementById('glvRead').onclick=readAll;
-  document.getElementById('glvStop').onclick=function(){ try{ window.speechSynthesis.cancel(); }catch(e){} };
+  document.getElementById('glvStop').onclick=stopRead;
   window.__glv={refresh:refresh,places:places,cityOf:cityOf,readAll:readAll};
 })();
 </script>
