@@ -2876,7 +2876,7 @@ if('serviceWorker' in navigator){
         var near=ps.some(function(p){ return QT.haversine([p.lat,p.lon],[r.lat,r.lon])<=5000; });
         if(!near) return; n++; names.push(r.nom);
         var ic=(r.image&&/^https?:/.test(r.image))?L.divIcon({className:'glv-logo',html:'<img src="'+esc(r.image)+'" referrerpolicy="no-referrer" style="width:34px;height:34px;border-radius:50%;object-fit:cover;border:2px solid #d4af37;background:#fff;box-shadow:0 1px 4px #0006" onerror="this.outerHTML=\'🍽️\'">',iconSize:[34,34],iconAnchor:[17,17]}):L.divIcon({className:'ala-poi',html:'🍽️',iconSize:[24,24],iconAnchor:[12,12]});
-        L.marker([r.lat,r.lon],{icon:ic,zIndexOffset:310}).addTo(dinLayer).bindPopup('🍽️ <b>'+esc(r.nom)+'</b>'+(r.adr?'<br>'+esc(r.adr):'')+(r.tel?'<br>'+esc(r.tel):'')+'<br><a href="https://dinner.tn/menu?code='+encodeURIComponent(r.slug||'')+'" target="_blank" rel="noopener">📖 '+esc(r.nom)+'</a>'+advInfo(r.lat,r.lon,null,null));
+        L.marker([r.lat,r.lon],{icon:ic,zIndexOffset:310}).addTo(dinLayer).bindPopup('🍽️ <b>'+esc(r.nom)+'</b>'+(r.adr?'<br>'+esc(r.adr):'')+(r.tel?'<br>'+esc(r.tel):'')+'<br><a href="https://dinner.tn/menu?code='+encodeURIComponent(r.slug||'')+'" target="_blank" rel="noopener">📖 '+esc(r.nom)+'</a>'+advInfo(r.lat,r.lon,null,null,r.nom));
       });
       if(out) out.insertAdjacentHTML('afterbegin','<div class="prgR">🍽️ '+n+' / '+all.length+' على الخريطة'+(n?' — '+names.map(esc).join(' · '):'')+'</div>');
     }catch(e){ if(out) out.insertAdjacentHTML('afterbegin','<div class="prgE">🍽️ '+esc(e.message||e)+'</div>'); }
@@ -3017,7 +3017,7 @@ if('serviceWorker' in navigator){
     ['Snap food','Nabeul (position approximative)',36.4502,10.7392],['Shelby\'s food','Nabeul (position approximative)',36.4507,10.7421],['Cent 6 Fast-food Nabeul','Nabeul (position approximative)',36.4498,10.7365],['Ness cute nabeul','Nabeul (position approximative)',36.4497,10.7381],['Restopizzaria EVERYDAY','Nabeul (position approximative)',36.4477,10.7324],['Roxford','Nabeul (position approximative)',36.4469,10.7311],['MC LOUNGE','Nabeul (position approximative)',36.4456,10.732],['Five food','Nabeul (position approximative)',36.4474,10.736],['Trancetta','Nabeul (position approximative)',36.4465,10.7378],['O.smash burger','Nabeul (position approximative)',36.4467,10.7385],['Top Food Mlewi','Nabeul (position approximative)',36.4468,10.7311],['Elmakhmakh Nabeul','Nabeul (position approximative)',36.4458,10.7291],['El chi5 restaurant Fast food','Nabeul (position approximative)',36.4437,10.7207],['Foodies 90','Nabeul (position approximative)',36.4428,10.7218],['Patty Junkie','Nabeul (position approximative)',36.4422,10.7197],['Betta Food','Nabeul (position approximative)',36.4395,10.7127],['The Corner Hammamet','Hammamet (position approximative)',36.4286,10.6942],['Lella Rayhana','Mrezga / Nabeul (position approximative)',36.4439,10.7207]
   ];
   var manLayer=L.layerGroup().addTo(map);
-  MANUAL.forEach(function(r){ L.marker([r[2],r[3]],{icon:L.divIcon({className:'ala-poi',html:'🍴',iconSize:[24,24],iconAnchor:[12,12]}),zIndexOffset:320}).addTo(manLayer).bindPopup('🍴 <b>'+esc(r[0])+'</b><br>'+esc(r[1])+'<br><i>القائمة غير متوفرة</i>'+advInfo(r[2],r[3],null,null)); });
+  MANUAL.forEach(function(r){ L.marker([r[2],r[3]],{icon:L.divIcon({className:'ala-poi',html:'🍴',iconSize:[24,24],iconAnchor:[12,12]}),zIndexOffset:320}).addTo(manLayer).bindPopup('🍴 <b>'+esc(r[0])+'</b><br>'+esc(r[1])+advInfo(r[2],r[3],null,null,r[0])); });
   /* ===== 🧞 مستشار فرحوم: يسأل عن البرنامج والميزانية، يقرأ كل القوائم ويقترح المطاعم والأطباق داخل المنطقة ===== */
   var advLayer=L.layerGroup().addTo(map), advC=null, advCircle=null, advBusy=false, advPick=false;
   var SYN=[
@@ -3068,9 +3068,9 @@ if('serviceWorker' in navigator){
     if(pos) meMem=pos; else if(advC) pos={lat:advC.lat,lon:advC.lon};
     return pos;
   }
-  function advInfo(la,lo,lien,ville){
+  function advInfo(la,lo,lien,ville,nom){
     var m=/\/stores\/([^/?#]+)/.exec(lien||'');
-    return '<div class="glvInfo" data-lat="'+(la!=null?la:'')+'" data-lon="'+(lo!=null?lo:'')+'"'+(m?' data-slug="'+esc(m[1])+'" data-ville="'+esc(ville)+'"':'')+' style="margin-top:4px;font-size:12px">⏳</div>';
+    return '<div class="glvInfo" data-lat="'+(la!=null?la:'')+'" data-lon="'+(lo!=null?lo:'')+'"'+(m?' data-slug="'+esc(m[1])+'" data-ville="'+esc(ville)+'"':'')+(nom?' data-nom="'+esc(nom)+'"':'')+' style="margin-top:4px;font-size:12px">⏳</div>';
   }
   map.on('popupopen',async function(ev){
     var el=ev.popup.getElement&&ev.popup.getElement(); if(!el) return; var d=el.querySelector('.glvInfo'); if(!d||d.dataset.done) return; d.dataset.done='1';
@@ -3079,6 +3079,15 @@ if('serviceWorker' in navigator){
       var me=await advMe();
       if(me){ var m=QT.haversine([me.lat,me.lon],[la,lo]); lines.push('📏 يبعد عنك '+(m<1000?Math.round(m)+' م':(m/1000).toFixed(1)+' كم')); }
     }
+    var extra='';
+    if(!d.dataset.slug&&d.dataset.nom&&isFinite(la)){
+      try{
+        var cty=cityOf(la,lo), gl=cty?await fetchCity(cty):[], hit=null;
+        gl.forEach(function(x){ if(!hit&&advSame(d.dataset.nom,x.nom)) hit=x; });
+        var hm=hit&&/\/stores\/([^/?#]+)/.exec(hit.lien||'');
+        if(hm){ d.dataset.slug=hm[1]; d.dataset.ville=cty.slug; extra=advMenuLnk(hit.lien,cty.slug,hit.nom); }
+      }catch(e){}
+    }
     if(d.dataset.slug){
       d.innerHTML=lines.concat(['💰 …']).join('<br>');
       var k=d.dataset.ville+'|'+d.dataset.slug, pl=menuMem[k];
@@ -3086,8 +3095,17 @@ if('serviceWorker' in navigator){
       var pr=pl.map(function(p){return Number(p.prix);}).filter(function(x){return isFinite(x)&&x>0;});
       lines.push(pr.length?'💰 من '+Math.min.apply(null,pr)+' إلى '+Math.max.apply(null,pr)+' DT ('+pr.length+' طبق)':'💰 القائمة غير متوفرة');
     }
-    d.innerHTML=lines.join('<br>')||'';
+    if(!d.dataset.slug&&d.dataset.nom) lines.push('القائمة غير متوفرة');
+    d.innerHTML=(extra?extra+'<br>':'')+lines.join('<br>');
   });
+  var GEN={restaurant:1,resto:1,cafe:1,fast:1,food:1,foods:1,pizzeria:1,snack:1,chez:1,the:1,bar:1,grill:1,burger:1,house:1,tunis:1,nabeul:1,hammamet:1,sousse:1};
+  function advTok(t){ return advNorm(t).split(/[^a-z0-9\u0600-\u06ff]+/).filter(function(w){ return w.length>=3&&!GEN[w]; }); }
+  function advSame(a,b){
+    var x=gnorm(a), y=gnorm(b); if(x.length<3||y.length<3) return false;
+    if(x===y||(x.length>=4&&y.indexOf(x)>=0)||(y.length>=4&&x.indexOf(y)>=0)) return true;
+    var ta=advTok(a), tb=advTok(b); if(!ta.length||!tb.length) return false;
+    return ta.some(function(w){ return w.length>=4&&tb.indexOf(w)>=0; })||(ta.length>=2&&ta.every(function(w){ return tb.indexOf(w)>=0; }));
+  }
   function advGps(la,lo){ return (la!=null&&lo!=null)?'<a href="https://www.google.com/maps/search/?api=1&query='+la+','+lo+'" target="_blank" rel="noopener" title="GPS" style="text-decoration:none">📍</a> ':''; }
   /* worker restos-tn : GPS de tous les restaurants / fast-foods (OpenStreetMap) autour de la zone */
   var WR='https://spring-bonus-c1ea.lordsidhom78.workers.dev', osmLayer=L.layerGroup().addTo(map);
@@ -3104,14 +3122,10 @@ if('serviceWorker' in navigator){
         osmMem[key]=l;
       }catch(e){ l=[]; }
     }
-    l.forEach(function(x){ L.marker([x.lat,x.lon],{icon:L.divIcon({className:'ala-poi',html:'🍴',iconSize:[22,22],iconAnchor:[11,11]}),zIndexOffset:250}).addTo(osmLayer).bindPopup('🍴 <b>'+esc(x.nom)+'</b>'+(x.cuisine?'<br>'+esc(x.cuisine):'')+(x.tel?'<br>'+esc(x.tel):'')+'<br>'+advGps(x.lat,x.lon)+'GPS<br><i>القائمة غير متوفرة</i>'+advInfo(x.lat,x.lon,null,null)); });
+    l.forEach(function(x){ L.marker([x.lat,x.lon],{icon:L.divIcon({className:'ala-poi',html:'🍴',iconSize:[22,22],iconAnchor:[11,11]}),zIndexOffset:250}).addTo(osmLayer).bindPopup('🍴 <b>'+esc(x.nom)+'</b>'+(x.cuisine?'<br>'+esc(x.cuisine):'')+(x.tel?'<br>'+esc(x.tel):'')+'<br>'+advGps(x.lat,x.lon)+'GPS'+advInfo(x.lat,x.lon,null,null,x.nom)); });
     return l;
   }
-  function advMatch(nom,osm){
-    var n=gnorm(nom); if(n.length<3) return null;
-    for(var i=0;i<osm.length;i++){ var o=gnorm(osm[i].nom); if(o&&(o===n||(n.length>=4&&o.indexOf(n)>=0)||(o.length>=4&&n.indexOf(o)>=0))) return osm[i]; }
-    return null;
-  }
+  function advMatch(nom,osm){ for(var i=0;i<osm.length;i++){ if(advSame(nom,osm[i].nom)) return osm[i]; } return null; }
   /* المنطقة الافتراضية: المستخدم الأخضر، ثم موقعك (GPS)، ثم وسط الخريطة */
   async function advEnsureC(){
     if(advC) return;
@@ -3245,6 +3259,12 @@ if('serviceWorker' in navigator){
       if(!rows.length) html+='<div class="prgE">ما لقيت حتى طبق بهذا الاسم.</div>';
       html+=rows.map(function(r){ return '<div class="prgR">'+advGps(r.lat,r.lon)+'<b>'+esc(r.resto)+'</b> '+advMenuLnk(r.lien,r.ville,r.resto)+' — '+esc(r.nom)+' — <b>'+r.prix+' DT</b>'+(r.d!=null?' · '+Math.round(r.d)+' م':'')+'</div>'; }).join('');
       out.innerHTML=html;
+      advLayer.clearLayers(); var seenR={};
+      rows.forEach(function(r){
+        if(r.lat==null||seenR[r.lien]) return; seenR[r.lien]=1;
+        var mine=rows.filter(function(x){ return x.lien===r.lien; });
+        L.marker([r.lat,r.lon],{icon:L.divIcon({className:'ala-poi',html:'🍽️',iconSize:[26,26],iconAnchor:[13,13]}),zIndexOffset:600}).addTo(advLayer).bindPopup('🍽️ <b>'+esc(r.resto)+'</b><br>'+mine.slice(0,4).map(function(x){ return esc(x.nom)+' — '+x.prix+' DT'; }).join('<br>')+'<br>'+advMenuLnk(r.lien,r.ville,r.resto)+advInfo(r.lat,r.lon,r.lien,r.ville));
+      });
     }catch(e){ out.innerHTML='<div class="prgE">'+esc(e.message||e)+'</div>'; }
     advBusy=false;
   }
