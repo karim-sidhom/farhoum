@@ -3060,10 +3060,10 @@ if('serviceWorker' in navigator){
       var city=cityOf(advC.lat,advC.lon);
       if(!city){ out.innerHTML='<div class="prgE">المنطقة خارج المدن المغطاة (أبعد من 60 كم).</div>'; advBusy=false; return; }
       out.innerHTML='<div class="prgR">⏳ فرحوم يحدّد المطاعم في المنطقة…</div>';
-      var list=await fetchCity(city), inZone=[];
+      var list=await fetchCity(city), inZone=[], nUnk=0;
       for(var i=0;i<list.length;i+=6){
         var part=list.slice(i,i+6), geos=await Promise.all(part.map(function(r){ return glvGeo(r,city); }));
-        geos.forEach(function(gp,k){ if(gp&&gp.lat!=null&&QT.haversine([advC.lat,advC.lon],[gp.lat,gp.lon])<=radius) inZone.push({r:part[k],lat:gp.lat,lon:gp.lon}); });
+        geos.forEach(function(gp,k){ if(gp&&gp.lat!=null){ if(QT.haversine([advC.lat,advC.lon],[gp.lat,gp.lon])<=radius) inZone.push({r:part[k],lat:gp.lat,lon:gp.lon}); } else { inZone.push({r:part[k],lat:null,lon:null,unk:true}); nUnk++; } });
       }
       var dins=[]; try{ (await dinLoad()).forEach(function(d){ if(QT.haversine([advC.lat,advC.lon],[d.lat,d.lon])<=radius) dins.push(d); }); }catch(e){}
       var done=0;
@@ -3077,7 +3077,7 @@ if('serviceWorker' in navigator){
           done++;
         }));
       }
-      var res2=[];
+      var res2=[], nPl=0, nMenu=0; inZone.forEach(function(z){ if(z.plats&&z.plats.length){ nMenu++; nPl+=z.plats.length; } });
       inZone.forEach(function(z){
         var rn=advNorm(z.r.nom), rk=keys.filter(function(k){ return rn.indexOf(k)>=0; }).length, dishes=[];
         z.plats.forEach(function(p){
@@ -3090,16 +3090,16 @@ if('serviceWorker' in navigator){
         var hits=dishes.filter(function(d){return d.sc>0;}).length;
         var score=(keys.length?hits*3+rk*2:0)+Math.min(dishes.length,10)/10;
         if(keys.length&&!hits&&!rk) score-=5;
-        res2.push({z:z,dishes:dishes,hits:hits,score:score,d:QT.haversine([advC.lat,advC.lon],[z.lat,z.lon])});
+        res2.push({z:z,dishes:dishes,hits:hits,score:score,d:z.lat!=null?QT.haversine([advC.lat,advC.lon],[z.lat,z.lon]):1e9});
       });
       res2.sort(function(a,b){ return b.score-a.score||a.d-b.d; });
-      var top=res2.slice(0,5), html='<div class="prgR"><b>🧞 '+inZone.length+' مطعم في المنطقة — قرأت '+done+' قائمة</b>'+(bud?' · الميزانية ≤ '+bud+' DT':'')+(keys.length?'':' · بلا تفضيل محدّد')+'</div>';
-      if(!top.length) html+='<div class="prgE">ما لقيت أطباق مناسبة للميزانية في هذه المنطقة. جرّب نصف قطر أكبر أو ميزانية أعلى.</div>';
+      var top=res2.slice(0,5), html='<div class="prgR"><b>🧞 '+(inZone.length-nUnk)+' مطعم في المنطقة'+(nUnk?' + '+nUnk+' بلا موقع':'')+' — '+nMenu+' قائمة فيها '+nPl+' طبق</b>'+(bud?' · الميزانية ≤ '+bud+' DT':'')+(keys.length?'':' · بلا تفضيل محدّد')+'</div>';
+      if(!top.length) html+='<div class="prgE">ما لقيت أطباق مناسبة. (مطاعم المدينة: '+list.length+' · قوائم مقروءة: '+nMenu+' · أطباق: '+nPl+')'+(nPl&&bud?' — جرّب ميزانية أعلى.':'')+'</div>';
       var sp=[];
       top.forEach(function(t,ix){
         var show=t.dishes.slice(0,3);
-        html+='<div class="prgR"><b>'+(ix+1)+'. <a href="'+esc(t.z.r.lien)+'" target="_blank" rel="noopener" style="color:#ffd966">'+esc(t.z.r.nom)+'</a></b> · '+Math.round(t.d)+' م'+(t.hits?' ✅':'')+'<br>'+show.map(function(d){ return '• '+esc(d.nom)+' — <b>'+d.prix+' DT</b>'; }).join('<br>')+'</div>';
-        L.marker([t.z.lat,t.z.lon],{icon:L.divIcon({className:'ala-poi',html:'<b style="background:#d4af37;color:#0d1a6e;border-radius:50%;padding:2px 7px">'+(ix+1)+'</b>',iconSize:[26,26],iconAnchor:[13,13]}),zIndexOffset:600}).addTo(advLayer).bindPopup('🧞 '+esc(t.z.r.nom)+'<br>'+show.map(function(d){return esc(d.nom)+' — '+d.prix+' DT';}).join('<br>'));
+        html+='<div class="prgR"><b>'+(ix+1)+'. <a href="'+esc(t.z.r.lien)+'" target="_blank" rel="noopener" style="color:#ffd966">'+esc(t.z.r.nom)+'</a></b> · '+(t.z.lat!=null?Math.round(t.d)+' م':'📍 الموقع غير معروف')+(t.hits?' ✅':'')+'<br>'+show.map(function(d){ return '• '+esc(d.nom)+' — <b>'+d.prix+' DT</b>'; }).join('<br>')+'</div>';
+        if(t.z.lat!=null) L.marker([t.z.lat,t.z.lon],{icon:L.divIcon({className:'ala-poi',html:'<b style="background:#d4af37;color:#0d1a6e;border-radius:50%;padding:2px 7px">'+(ix+1)+'</b>',iconSize:[26,26],iconAnchor:[13,13]}),zIndexOffset:600}).addTo(advLayer).bindPopup('🧞 '+esc(t.z.r.nom)+'<br>'+show.map(function(d){return esc(d.nom)+' — '+d.prix+' DT';}).join('<br>'));
         sp.push({n:t.z.r.nom,d:show});
       });
       if(dins.length) html+='<div class="prgR">🍽️ مطاعم Dinner في المنطقة (بدون قائمة): '+dins.slice(0,8).map(function(d){ return esc(d.nom); }).join(' · ')+'</div>';
@@ -3108,6 +3108,53 @@ if('serviceWorker' in navigator){
         if(!sp.length) say('ما لقيتش أطباق مناسبة في هذه المنطقة','ar-SA');
         else { say('هذا اللي يناسبك'+(bud?' بميزانية '+bud+' دينار':''),'ar-SA'); sp.forEach(function(s,ix){ say('المطعم '+(ix+1),'ar-SA'); say(s.n,'fr-FR'); say(s.d.map(function(d){return d.nom+', '+d.prix+' dinars';}).join('. '),'fr-FR'); }); }
       }
+    }catch(e){ out.innerHTML='<div class="prgE">'+esc(e.message||e)+'</div>'; }
+    advBusy=false;
+  }
+  /* 🔎 بحث عن طبق: يعرض كل الأطباق المطابقة من كل مطاعم المنطقة مع أسعارها */
+  var advCache={key:null,zone:null};
+  async function advGather(id,out){
+    var radius=parseFloat(document.getElementById('glvRad').value)*1000;
+    if(!advC){ var u=window.__glvRef; if(u) advSetC(u.lat,u.lon); else { var c0=map.getCenter(); advSetC(c0.lat,c0.lng); } }
+    var city=cityOf(advC.lat,advC.lon); if(!city) throw new Error('المنطقة خارج المدن المغطاة (أبعد من 60 كم).');
+    var key=city.c+'|'+advC.lat.toFixed(4)+'|'+advC.lon.toFixed(4)+'|'+radius;
+    if(advCache.key===key) return advCache.zone;
+    out.innerHTML='<div class="prgR">⏳ فرحوم يحمّل المطاعم والقوائم…</div>';
+    var list=await fetchCity(city), zone=[];
+    for(var i=0;i<list.length;i+=6){
+      var part=list.slice(i,i+6), geos=await Promise.all(part.map(function(r){ return glvGeo(r,city); }));
+      geos.forEach(function(gp,k){ if(gp&&gp.lat!=null){ var d=QT.haversine([advC.lat,advC.lon],[gp.lat,gp.lon]); if(d<=radius) zone.push({r:part[k],d:d}); } else zone.push({r:part[k],d:null}); });
+    }
+    for(var j=0;j<zone.length;j+=4){
+      if(id!==readId) return null;
+      await Promise.all(zone.slice(j,j+4).map(async function(z){
+        var m=/\/stores\/([^/?#]+)/.exec(z.r.lien||''); z.plats=[]; if(!m) return;
+        try{ var res=await fetch(W+'/menu?slug='+encodeURIComponent(m[1])+'&ville='+encodeURIComponent(city.slug)); if(res.ok){ var jj=await res.json(); z.plats=(jj&&jj.plats)||[]; } }catch(e){}
+      }));
+    }
+    advCache={key:key,zone:zone}; return zone;
+  }
+  async function advSearch(){
+    if(advBusy) return; var out=document.getElementById('glvAdvOut'), q=advNorm(document.getElementById('glvQ').value).trim();
+    if(!q){ out.innerHTML='<div class="prgE">اكتب اسم الطبق (مثلاً sandwich).</div>'; return; }
+    advBusy=true; stopRead(); var id=readId, bud=advBudget();
+    try{
+      var terms=[q]; SYN.forEach(function(s){ if(s[0].some(function(w){ return advNorm(w)===q; })) terms=s[0].map(advNorm); });
+      var zone=await advGather(id,out); if(!zone){ advBusy=false; return; }
+      var rows=[], nMenu=0;
+      zone.forEach(function(z){
+        if(z.plats.length) nMenu++;
+        z.plats.forEach(function(p){
+          var pr=Number(p.prix); if(!isFinite(pr)||pr<=0) return; if(bud&&pr>bud) return;
+          var tx=advNorm((p.nom||'')+' '+(p.categorie||''));
+          if(terms.some(function(t){ return tx.indexOf(t)>=0; })) rows.push({resto:z.r.nom,lien:z.r.lien,nom:p.nom,cat:p.categorie||'',prix:pr,d:z.d});
+        });
+      });
+      rows.sort(function(a,b){ return a.prix-b.prix||a.resto.localeCompare(b.resto); });
+      var html='<div class="prgR"><b>🔎 «'+esc(document.getElementById('glvQ').value)+'» : '+rows.length+' طبق في '+new Set(rows.map(function(r){return r.resto;})).size+' مطعم</b> · قوائم مقروءة: '+nMenu+'/'+zone.length+(bud?' · ≤ '+bud+' DT':'')+'</div>';
+      if(!rows.length) html+='<div class="prgE">ما لقيت حتى طبق بهذا الاسم.</div>';
+      html+=rows.map(function(r){ return '<div class="prgR"><a href="'+esc(r.lien)+'" target="_blank" rel="noopener" style="color:#ffd966"><b>'+esc(r.resto)+'</b></a> — '+esc(r.nom)+' — <b>'+r.prix+' DT</b>'+(r.d!=null?' · '+Math.round(r.d)+' م':'')+'</div>'; }).join('');
+      out.innerHTML=html;
     }catch(e){ out.innerHTML='<div class="prgE">'+esc(e.message||e)+'</div>'; }
     advBusy=false;
   }
@@ -3120,7 +3167,7 @@ if('serviceWorker' in navigator){
     try{ r.start(); }catch(e){}
   }
   var panel=document.createElement('div'); panel.id='glvPanel';
-  panel.innerHTML='<div><b>🍔 المطاعم</b> — مطاعم حول المحطتين الأقربتين وحول موقعك</div><button id="glvGo">🔄 تحديث</button><button id="glvRead">🔊 اقرأ</button><button id="glvEnv">👁️ محيطي</button><button id="glvStop" style="background:transparent;color:#fff">⏹</button><div id="glvAdv" style="margin-top:8px;border-top:1px solid #d4af3755;padding-top:8px"><b>🧞 مستشار فرحوم</b> — قلّي برنامجك وميزانيتك ونقترح عليك المطاعم والأطباق<textarea id="glvProg" rows="2" placeholder="برنامجي: مثلاً نتغدى بيتزا أو ساندويتش قبل القطار / déjeuner rapide" style="width:100%;box-sizing:border-box;margin-top:6px;border-radius:8px;padding:6px;direction:rtl"></textarea><div style="display:flex;gap:6px;margin-top:4px"><input id="glvBud" type="number" min="1" step="0.5" placeholder="الميزانية DT" style="flex:1;border-radius:8px;padding:6px"><select id="glvRad" style="border-radius:8px;padding:6px"><option value="1">1 كم</option><option value="3" selected>3 كم</option><option value="5">5 كم</option></select></div><button id="glvZone">📍 حدّد المنطقة</button><button id="glvMic">🎤</button><button id="glvSug">🍽️ اقترح</button><div id="glvAdvOut"></div></div><div id="glvOut"></div>';
+  panel.innerHTML='<div><b>🍔 المطاعم</b> — مطاعم حول المحطتين الأقربتين وحول موقعك</div><button id="glvGo">🔄 تحديث</button><button id="glvRead">🔊 اقرأ</button><button id="glvEnv">👁️ محيطي</button><button id="glvStop" style="background:transparent;color:#fff">⏹</button><div id="glvAdv" style="margin-top:8px;border-top:1px solid #d4af3755;padding-top:8px"><b>🧞 مستشار فرحوم</b> — قلّي برنامجك وميزانيتك ونقترح عليك المطاعم والأطباق<textarea id="glvProg" rows="2" placeholder="برنامجي: مثلاً نتغدى بيتزا أو ساندويتش قبل القطار / déjeuner rapide" style="width:100%;box-sizing:border-box;margin-top:6px;border-radius:8px;padding:6px;direction:rtl"></textarea><div style="display:flex;gap:6px;margin-top:4px"><input id="glvBud" type="number" min="1" step="0.5" placeholder="الميزانية DT" style="flex:1;border-radius:8px;padding:6px"><select id="glvRad" style="border-radius:8px;padding:6px"><option value="1">1 كم</option><option value="3" selected>3 كم</option><option value="5">5 كم</option></select></div><div style="display:flex;gap:6px;margin-top:6px"><input id="glvQ" type="text" placeholder="🔎 اسم طبق: sandwich، pizza، عصير…" style="flex:1;border-radius:8px;padding:6px"><button id="glvFind" style="margin-top:0">🔎 ابحث</button></div><button id="glvZone">📍 حدّد المنطقة</button><button id="glvMic">🎤</button><button id="glvSug">🍽️ اقترح</button><div id="glvAdvOut"></div></div><div id="glvOut"></div>';
   document.body.appendChild(panel);
   var css=document.createElement('style'); css.textContent='#glvPanel{position:absolute;top:58px;right:10px;z-index:1000;width:min(380px,calc(100vw - 20px));max-height:72vh;overflow:auto;background:#0d1a6eF2;color:#fff;border:1px solid #d4af37;border-radius:12px;padding:10px;direction:rtl;font-size:13px;display:none}#glvPanel button{margin-top:6px;margin-inline-end:6px;padding:6px 12px;border-radius:8px;border:1px solid #d4af37;background:#d4af37;color:#0d1a6e;font-weight:800;cursor:pointer}'; document.head.appendChild(css);
   var btn=document.createElement('button'); btn.id='glvBtn'; btn.textContent='🍔'; btn.title='المطاعم';
@@ -3132,6 +3179,8 @@ if('serviceWorker' in navigator){
   document.getElementById('glvEnv').onclick=envRead;
   document.getElementById('glvStop').onclick=stopRead;
   document.getElementById('glvSug').onclick=advRun;
+  document.getElementById('glvFind').onclick=advSearch;
+  document.getElementById('glvQ').addEventListener('keydown',function(e){ if(e.key==='Enter') advSearch(); });
   document.getElementById('glvMic').onclick=advMic;
   document.getElementById('glvZone').onclick=function(){
     var o=document.getElementById('glvAdvOut'); o.innerHTML='<div class="prgR">📍 اضغط على الخريطة لتحديد مركز المنطقة…</div>'; advPick=true;
