@@ -3158,6 +3158,7 @@ if('serviceWorker' in navigator){
     if(advBusy) return; var out=document.getElementById('glvAdvOut');
     var prog=document.getElementById('glvProg').value.trim(), bud=advBudget();
     if(!prog&&!bud){ out.innerHTML='<div class="prgE">اكتب برنامجك وميزانيتك أولاً (أو اضغط 🎤).</div>'; advAsk(); return; }
+    out.innerHTML='<div class="prgR">⏳ فرحوم يبدأ…</div>';
     await advEnsureC();
     advBusy=true; stopRead(); var id=readId;
     var radius=parseFloat(document.getElementById('glvRad').value)*1000, keys=advKeys(prog);
@@ -3184,7 +3185,7 @@ if('serviceWorker' in navigator){
         res2.push({z:z,dishes:dishes,hits:hits,score:score,d:z.lat!=null?QT.haversine([advC.lat,advC.lon],[z.lat,z.lon]):1e9});
       });
       res2.sort(function(a,b){ return b.score-a.score||a.d-b.d; });
-      var top=res2.slice(0,5), html='<div class="prgR"><b>🧞 '+(inZone.length-nUnk)+' مطعم في المنطقة'+(nUnk?' + '+nUnk+' بلا موقع':'')+' — '+nMenu+' قائمة فيها '+nPl+' طبق</b>'+(bud?' · الميزانية ≤ '+bud+' DT':'')+(keys.length?'':' · بلا تفضيل محدّد')+'</div>';
+      var top=res2.slice(0,5), html='<div class="prgR"><b>🧞 '+(inZone.length-nUnk)+' مطعم في المنطقة'+(nUnk?' + '+nUnk+' بلا موقع':'')+' — '+nMenu+' قائمة فيها '+nPl+' طبق</b>'+(bud?' · الميزانية ≤ '+bud+' DT':'')+(advCache.upd?' · أسعار بتاريخ '+advCache.upd:'')+(keys.length?'':' · بلا تفضيل محدّد')+'</div>';
       if(!top.length) html+='<div class="prgE">ما لقيت أطباق مناسبة. (مطاعم المدينة: '+list.length+' · قوائم مقروءة: '+nMenu+' · أطباق: '+nPl+')'+(nPl&&bud?' — جرّب ميزانية أعلى.':'')+'</div>';
       var sp=[];
       top.forEach(function(t,ix){
@@ -3204,18 +3205,39 @@ if('serviceWorker' in navigator){
   }
   /* 🔎 بحث عن طبق: يعرض كل الأطباق المطابقة من كل مطاعم المنطقة مع أسعارها */
   var advCache={key:null,zone:null};
-  var advFlight={};
+  var advFlight={}, advProgOut=null;
+  /* قاعدة البيانات (Supabase): مطاعم + إحداثيات + قوائم وأسعار جاهزة، قراءة واحدة سريعة */
+  async function advDb(slug){
+    try{
+      var res=await fetch(SUPABASE_URL+'/rest/v1/resto_menus?city=eq.'+encodeURIComponent(slug)+'&select=slug,nom,lien,image,lat,lon,plats,updated_at&limit=3000',{headers:{apikey:SUPABASE_KEY}});
+      if(!res.ok) return null; var j=await res.json(); return Array.isArray(j)&&j.length?j:null;
+    }catch(e){ return null; }
+  }
   async function advPool(items,n,fn){ var i=0; await Promise.all(Array.apply(null,Array(n)).map(async function(){ while(i<items.length){ var it=items[i++]; await fn(it); } })); }
   async function advGather(id,out){
-    await advEnsureC();
+    advProgOut=out; await advEnsureC();
     var radius=parseFloat(document.getElementById('glvRad').value)*1000;
     var city=cityOf(advC.lat,advC.lon); if(!city) throw new Error('المنطقة خارج المدن المغطاة (أبعد من 60 كم). اضغط «📍 حدّد المنطقة» ثم اضغط على الخريطة قرب مدينة.');
     var key=city.c+'|'+advC.lat.toFixed(4)+'|'+advC.lon.toFixed(4)+'|'+radius;
     if(advCache.key===key) return advCache.zone;
-    if(advFlight[key]) return advFlight[key];
+    if(advFlight[key]){ out.innerHTML='<div class="prgR">⏳ فرحوم يحمّل المطاعم والقوائم…</div>'; return advFlight[key]; }
     var P=(async function(){
       out.innerHTML='<div class="prgR">⏳ فرحوم يحمّل المطاعم والقوائم…</div>';
-      var both=await Promise.all([fetchCity(city),advOsm(radius)]), list=both[0], osm=both[1], zone=[], n=0;
+      var dbp=advDb(city.slug), osmp=advOsm(radius), rows=await dbp, osm=await osmp, zone=[], n=0;
+      if(rows){
+        var upd='';
+        rows.forEach(function(r){
+          var la=r.lat,lo=r.lon, rr={nom:r.nom,lien:r.lien,image:r.image};
+          if(la==null){ var mt=advMatch(r.nom,osm); if(mt){ la=mt.lat; lo=mt.lon; } }
+          var d=la!=null?QT.haversine([advC.lat,advC.lon],[la,lo]):null;
+          if(d!=null&&d>radius) return;
+          var pl=r.plats||[]; menuMem[city.slug+'|'+r.slug]=pl;
+          zone.push({r:rr,d:d,v:city.slug,lat:la,lon:lo,plats:pl});
+          if(r.updated_at&&r.updated_at>upd) upd=r.updated_at;
+        });
+        advCache={key:key,zone:zone,total:rows.length,upd:upd?upd.slice(0,10):''}; return zone;
+      }
+      var list=await fetchCity(city);
       await advPool(list,20,async function(r){
         var gp=await glvGeo(r,city), la=null, lo=null;
         if(gp&&gp.lat!=null){ la=gp.lat; lo=gp.lon; } else { var mt=advMatch(r.nom,osm); if(mt){ la=mt.lat; lo=mt.lon; } }
@@ -3227,7 +3249,7 @@ if('serviceWorker' in navigator){
           if(!pl){ pl=[]; try{ var res=await fetch(W+'/menu?slug='+encodeURIComponent(m[1])+'&ville='+encodeURIComponent(city.slug)); if(res.ok){ var jj=await res.json(); pl=(jj&&jj.plats)||[]; } }catch(e){} if(pl.length) menuSet(k,pl); }
           z.plats=pl;
         }
-        zone.push(z); n++; if(n%5===0) out.innerHTML='<div class="prgR">⏳ فرحوم قرأ '+n+' قائمة…</div>';
+        zone.push(z); n++; if(n%5===0&&advProgOut) advProgOut.innerHTML='<div class="prgR">⏳ فرحوم قرأ '+n+' قائمة…</div>';
       });
       advCache={key:key,zone:zone,total:list.length}; return zone;
     })();
@@ -3237,6 +3259,7 @@ if('serviceWorker' in navigator){
   async function advSearch(){
     if(advBusy) return; var out=document.getElementById('glvAdvOut'), q=advNorm(document.getElementById('glvQ').value).trim();
     if(!q){ out.innerHTML='<div class="prgE">اكتب اسم الطبق (مثلاً sandwich).</div>'; return; }
+    out.innerHTML='<div class="prgR">⏳ فرحوم يبحث…</div>';
     advBusy=true; stopRead(); var id=readId, bud=advBudget();
     try{
       var terms=[q]; SYN.forEach(function(s){ if(s[0].some(function(w){ return advNorm(w)===q; })) terms=s[0].map(advNorm); });
