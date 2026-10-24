@@ -2729,7 +2729,7 @@ if('serviceWorker' in navigator){
   try{ var sv=localStorage.getItem('prg_txt'); if(sv) document.getElementById('prgTxt').value=sv; }catch(e){}
   window.__prg={parse:parse,run:run,planHop:planHop};
 })();
-/* ===== 🍔 Glovo: بين محطتين، مطاعم Glovo حول المحطتين الأقربتين وحول موقعك، مع قراءة صوتية (محطة بمحطة) عبر worker Glovo Tunisie ===== */
+/* ===== 🍔 المطاعم: بين محطتين، مطاعم حول المحطتين الأقربتين وحول موقعك، مع قراءة صوتية (محطة بمحطة) ===== */
 (function(){
   var W='https://glovo.lordsidhom78.workers.dev', TTL=30*60000, CK='glv_cache_v1';
   var CITIES=[{c:'TIS',slug:'tunis',ar:'تونس',lat:36.80,lon:10.18},{c:'SFX',slug:'sfax',ar:'صفاقس',lat:34.74,lon:10.76},{c:'SOU',slug:'sousse',ar:'سوسة',lat:35.83,lon:10.64},{c:'MDH',slug:'mahdia',ar:'المهدية',lat:35.50,lon:11.06},{c:'GBS',slug:'gabes',ar:'قابس',lat:33.88,lon:10.10},{c:'MST',slug:'monastir',ar:'المنستير',lat:35.78,lon:10.83},{c:'DJR',slug:'djerba',ar:'جربة',lat:33.81,lon:10.85},{c:'NBL',slug:'nabeul-hammamet',ar:'نابل',lat:36.45,lon:10.73}];
@@ -2742,20 +2742,20 @@ if('serviceWorker' in navigator){
     var list=[];
     if(c.c==='TIS'){
       var r=await fetch(W+'/restos'); if(!r.ok) throw new Error('HTTP '+r.status); var j=await r.json();
-      list=(j.restos||[]).map(function(x){ return {nom:x.nom,lien:x.lien}; });
+      list=(j.restos||[]).map(function(x){ return {nom:x.nom,lien:x.lien,image:x.image||null}; });
     } else {
       /* مسار /restos مع معاملات المدينة (city, lat, lng, addr, ville) ثم الرجوع إلى /page */
       try{
         var cap=c.slug.charAt(0).toUpperCase()+c.slug.slice(1);
         var r1=await fetch(W+'/restos?city='+c.c+'&lat='+c.lat+'&lng='+c.lon+'&addr='+encodeURIComponent(cap)+'&ville='+c.slug+'&cat=restaurants_1&nocache=1');
-        if(r1.ok){ var j1=await r1.json(); list=(j1.restos||[]).map(function(x){ return {nom:x.nom,lien:x.lien}; }); }
+        if(r1.ok){ var j1=await r1.json(); list=(j1.restos||[]).map(function(x){ return {nom:x.nom,lien:x.lien,image:x.image||null}; }); }
       }catch(e1){ list=[]; }
       if(list.length){ cache[k]={at:Date.now(),list:list}; save(); return list; }
       var r2=await fetch(W+'/page/fr/tn/'+c.slug+'/categories/restaurants_1?city='+c.c+'&lat='+c.lat+'&lng='+c.lon+'&addr='+encodeURIComponent(c.slug)); if(!r2.ok) throw new Error('HTTP '+r2.status);
       var doc=new DOMParser().parseFromString(await r2.text(),'text/html'), seen={};
       doc.querySelectorAll('a[href*="/stores/"]').forEach(function(a){
         var h=a.getAttribute('href')||'', m=/\/stores\/([^/?#]+)/.exec(h); if(!m||seen[m[1]]) return; seen[m[1]]=1;
-        list.push({nom:nice(m[1],c.c),lien:h.indexOf('http')===0?h:'https://glovoapp.com'+h});
+        var im=a.querySelector('img'); list.push({nom:nice(m[1],c.c),lien:h.indexOf('http')===0?h:'https://glovoapp.com'+h,image:im?(im.getAttribute('src')||im.getAttribute('data-src')||null):null});
       });
     }
     if(!list.length) throw new Error('قائمة فارغة');
@@ -2772,7 +2772,7 @@ if('serviceWorker' in navigator){
     var u=window.__glvRef, out=document.getElementById('glvOut'); if(!out) return;
     if(!u){ out.innerHTML='<div class="prgE">لا يوجد مستخدم (دائرة خضراء) متصل الآن.</div>'; return; }
     if(state.busy) return; state.busy=true;
-    out.innerHTML='<div class="prgR">⏳ جارٍ جلب مطاعم Glovo…</div>';
+    out.innerHTML='<div class="prgR">⏳ جارٍ جلب المطاعم…</div>';
     try{
       var ps=places(u), groups={}, order=[];
       ps.forEach(function(p){ var c=cityOf(p.lat,p.lon); var k=c?c.c:'none'; if(!groups[k]){ groups[k]={city:c,labels:[],say:[],pts:[]}; order.push(k);} groups[k].pts.push({lat:p.lat,lon:p.lon}); groups[k].labels.push(p.label); if(p.say) groups[k].say.push(p.say); });
@@ -2780,19 +2780,42 @@ if('serviceWorker' in navigator){
       state.groups=[];
       for(var i=0;i<order.length;i++){
         var g=groups[order[i]];
-        if(!g.city){ html+='<div class="prgE">'+esc(g.labels.join('، '))+' : خارج مناطق Glovo (أبعد من 60 كم عن أقرب مدينة مغطاة).</div>'; continue; }
+        if(!g.city){ html+='<div class="prgE">'+esc(g.labels.join('، '))+' : خارج المناطق المغطاة (أبعد من 60 كم عن أقرب مدينة مغطاة).</div>'; continue; }
         try{
           var list=await fetchCity(g.city); g.list=list; state.groups.push(g);
-          html+='<div class="prgR"><b>🍔 Glovo '+esc(g.city.ar)+'</b> — قرب '+esc(g.labels.join('، '))+' ('+list.length+')<br>'+list.slice(0,40).map(function(x){return '<a href="'+esc(x.lien)+'" target="_blank" rel="noopener" style="color:#ffd966">'+esc(x.nom)+'</a>';}).join(' · ')+'</div>';
-        }catch(e){ html+='<div class="prgE">'+esc(g.labels.join('، '))+' ('+esc(g.city.ar)+') : تعذّر جلب Glovo — '+esc(e.message||e)+'</div>'; }
+          html+='<div class="prgR"><b>🍔 '+esc(g.city.ar)+'</b> — قرب '+esc(g.labels.join('، '))+' ('+list.length+')<br>'+list.slice(0,40).map(function(x){return '<a href="'+esc(x.lien)+'" target="_blank" rel="noopener" style="color:#ffd966">'+esc(x.nom)+'</a>';}).join(' · ')+'</div>';
+        }catch(e){ html+='<div class="prgE">'+esc(g.labels.join('، '))+' ('+esc(g.city.ar)+') : تعذّر جلب المطاعم — '+esc(e.message||e)+'</div>'; }
       }
       out.innerHTML=html;
       glvMap();
     }catch(e){ out.innerHTML='<div class="prgE">'+esc(e.message||e)+'</div>'; }
     state.busy=false;
   }
-  /* وضع مطاعم Glovo على الخريطة: مطابقة الأسماء مع مطاعم OpenStreetMap القريبة */
+  /* وضع المطاعم على الخريطة: مطابقة الأسماء مع مطاعم OpenStreetMap القريبة */
   var glvLayer=L.layerGroup().addTo(map);
+  var GK='glv_geo_v1', geoC={}; try{ geoC=JSON.parse(localStorage.getItem(GK)||'{}')||{}; }catch(e){}
+  function geoSave(){ try{ localStorage.setItem(GK,JSON.stringify(geoC)); }catch(e){} }
+  async function glvGeo(r,city){
+    var m=/\/stores\/([^/?#]+)/.exec(r.lien||''); if(!m) return null; var slug=m[1], k=city.slug+'|'+slug;
+    if(geoC[k]&&Date.now()-geoC[k].at<30*86400000) return geoC[k];
+    try{
+      var res=await fetch(W+'/geo?slug='+encodeURIComponent(slug)+'&ville='+city.slug+'&city='+city.c+'&lat='+city.lat+'&lng='+city.lon+'&addr='+encodeURIComponent(city.slug));
+      if(!res.ok) return null; var j=await res.json();
+      var o={at:Date.now(),lat:j.latitude,lon:j.longitude,adresse:j.adresse||null};
+      if(o.lat!=null||o.adresse){ geoC[k]=o; geoSave(); return o; } return null;
+    }catch(e){ return null; }
+  }
+  var lastNom=0;
+  async function glvGeocode(addr,city){
+    var k='a|'+addr; if(geoC[k]) return geoC[k].p;
+    var wait=1100-(Date.now()-lastNom); if(wait>0) await new Promise(function(r2){ setTimeout(r2,wait); }); lastNom=Date.now();
+    try{
+      var res=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=tn&viewbox='+(city.lon-0.6)+','+(city.lat+0.6)+','+(city.lon+0.6)+','+(city.lat-0.6)+'&bounded=1&q='+encodeURIComponent(addr+', '+city.slug));
+      var j=await res.json(); if(j&&j[0]){ var p={lat:parseFloat(j[0].lat),lon:parseFloat(j[0].lon)}; geoC[k]={at:Date.now(),p:p}; geoSave(); return p; }
+    }catch(e){}
+    return null;
+  }
+
   function gnorm(t){ return String(t||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9\u0600-\u06ff]/g,''); }
   async function glvMap(){
     glvLayer.clearLayers(); var placed={}, total=0, ok=0, out=document.getElementById('glvOut');
@@ -2807,13 +2830,24 @@ if('serviceWorker' in navigator){
           els.forEach(function(el){ var la=el.lat!=null?el.lat:(el.center&&el.center.lat), ln=el.lon!=null?el.lon:(el.center&&el.center.lon); if(la!=null&&el.tags&&el.tags.name) osm.push({n:gnorm(el.tags.name),name:el.tags.name,lat:la,lon:ln}); });
         }catch(e){}
       }
-      g.list.forEach(function(r){
-        var n=gnorm(r.nom); if(n.length<3||placed[r.lien]) return;
-        var best=null; osm.forEach(function(o){ if(o.n&&(o.n===n||(n.length>=4&&o.n.indexOf(n)>=0)||(o.n.length>=4&&n.indexOf(o.n)>=0))){ if(!best) best=o; } });
-        if(!best) return;
+      for(var ri=0;ri<g.list.length;ri++){
+        var r=g.list[ri]; if(placed[r.lien]) continue;
+        var pos=null, label='';
+        /* 1) الموقع/العنوان من صفحة المطعم عبر الـworker */
+        var gp=await glvGeo(r,g.city);
+        if(gp&&gp.lat!=null){ pos={lat:gp.lat,lon:gp.lon}; }
+        else if(gp&&gp.adresse){ var q=await glvGeocode(gp.adresse,g.city); if(q) pos=q; label=gp.adresse; }
+        /* 2) احتياطي: مطابقة الاسم مع OpenStreetMap */
+        if(!pos){
+          var n=gnorm(r.nom); if(n.length>=3){
+            var best=null; osm.forEach(function(o){ if(!best&&o.n&&(o.n===n||(n.length>=4&&o.n.indexOf(n)>=0)||(o.n.length>=4&&n.indexOf(o.n)>=0))) best=o; });
+            if(best) pos={lat:best.lat,lon:best.lon};
+          }
+        }
+        if(!pos) continue;
         placed[r.lien]=1; ok++;
-        L.marker([best.lat,best.lon],{icon:L.divIcon({className:'ala-poi',html:'🍔',iconSize:[24,24],iconAnchor:[12,12]}),zIndexOffset:300}).addTo(glvLayer).bindPopup('🍔 <a href="'+esc(r.lien)+'" target="_blank" rel="noopener">'+esc(r.nom)+'</a>');
-      });
+        L.marker([pos.lat,pos.lon],{icon:(r.image&&/^https?:/.test(r.image))?L.divIcon({className:'glv-logo',html:'<img src="'+esc(r.image)+'" referrerpolicy="no-referrer" style="width:34px;height:34px;border-radius:50%;object-fit:cover;border:2px solid #d4af37;background:#fff;box-shadow:0 1px 4px #0006" onerror="this.outerHTML=\'🍔\'">',iconSize:[34,34],iconAnchor:[17,17]}):L.divIcon({className:'ala-poi',html:'🍔',iconSize:[24,24],iconAnchor:[12,12]}),zIndexOffset:300}).addTo(glvLayer).bindPopup('🍔 <a href="'+esc(r.lien)+'" target="_blank" rel="noopener">'+esc(r.nom)+'</a>'+(label?'<br>'+esc(label):''));
+      }
     }
     if(out) out.insertAdjacentHTML('afterbegin','<div class="prgR">📍 '+ok+' / '+total+' على الخريطة</div>');
   }
@@ -2823,15 +2857,15 @@ if('serviceWorker' in navigator){
     state.groups.forEach(function(g){
       say('قرب '+g.labels.map(function(l){return l.replace(/^محطة /,'محطة ');}).join(' و')+'، في '+g.city.ar,'ar-SA');
       g.say.forEach(function(n){ say(n,'fr-FR'); });
-      say('مطاعم Glovo المتوفرة','ar-SA');
+      say('المطاعم المتوفرة','ar-SA');
       say(g.list.slice(0,10).map(function(x){return x.nom;}).join(', '),'fr-FR');
     });
   }
   var panel=document.createElement('div'); panel.id='glvPanel';
-  panel.innerHTML='<div><b>🍔 Glovo</b> — مطاعم Glovo حول المحطتين الأقربتين وحول موقعك</div><button id="glvGo">🔄 تحديث</button><button id="glvRead">🔊 اقرأ</button><button id="glvStop" style="background:transparent;color:#fff">⏹</button><div id="glvOut"></div>';
+  panel.innerHTML='<div><b>🍔 المطاعم</b> — مطاعم حول المحطتين الأقربتين وحول موقعك</div><button id="glvGo">🔄 تحديث</button><button id="glvRead">🔊 اقرأ</button><button id="glvStop" style="background:transparent;color:#fff">⏹</button><div id="glvOut"></div>';
   document.body.appendChild(panel);
   var css=document.createElement('style'); css.textContent='#glvPanel{position:absolute;top:58px;right:10px;z-index:1000;width:min(380px,calc(100vw - 20px));max-height:72vh;overflow:auto;background:#0d1a6eF2;color:#fff;border:1px solid #d4af37;border-radius:12px;padding:10px;direction:rtl;font-size:13px;display:none}#glvPanel button{margin-top:6px;margin-inline-end:6px;padding:6px 12px;border-radius:8px;border:1px solid #d4af37;background:#d4af37;color:#0d1a6e;font-weight:800;cursor:pointer}'; document.head.appendChild(css);
-  var btn=document.createElement('button'); btn.id='glvBtn'; btn.textContent='🍔'; btn.title='Glovo';
+  var btn=document.createElement('button'); btn.id='glvBtn'; btn.textContent='🍔'; btn.title='المطاعم';
   var anchor=document.getElementById('prgBtn')||document.getElementById('sat'); if(anchor&&anchor.parentNode) anchor.parentNode.insertBefore(btn,anchor.nextSibling); else document.body.appendChild(btn);
   btn.onclick=function(){ var open=panel.style.display==='block'; panel.style.display=open?'none':'block'; var p2=document.getElementById('prgPanel'); if(!open&&p2) p2.style.display='none'; if(!open) refresh(); };
   var prgB=document.getElementById('prgBtn'); if(prgB){ var old=prgB.onclick; prgB.onclick=function(){ old&&old(); if(document.getElementById('prgPanel').style.display==='block') panel.style.display='none'; }; }
