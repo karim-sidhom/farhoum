@@ -3062,6 +3062,13 @@ if('serviceWorker' in navigator){
     for(var i=0;i<osm.length;i++){ var o=gnorm(osm[i].nom); if(o&&(o===n||(n.length>=4&&o.indexOf(n)>=0)||(o.length>=4&&n.indexOf(o)>=0))) return osm[i]; }
     return null;
   }
+  /* المنطقة الافتراضية: المستخدم الأخضر، ثم موقعك (GPS)، ثم وسط الخريطة */
+  async function advEnsureC(){
+    if(advC) return;
+    var u=window.__glvRef; if(u){ advSetC(u.lat,u.lon); return; }
+    var pos=await new Promise(function(ok){ if(!navigator.geolocation){ ok(null); return; } navigator.geolocation.getCurrentPosition(function(p){ ok({lat:p.coords.latitude,lon:p.coords.longitude}); },function(){ ok(null); },{enableHighAccuracy:false,timeout:8000,maximumAge:300000}); });
+    if(pos) advSetC(pos.lat,pos.lon); else { var c0=map.getCenter(); advSetC(c0.lat,c0.lng); }
+  }
   function advNorm(t){ return String(t||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase(); }
   function advKeys(prog){
     var t=advNorm(prog), keys=[], seen={};
@@ -3085,13 +3092,13 @@ if('serviceWorker' in navigator){
     if(advBusy) return; var out=document.getElementById('glvAdvOut');
     var prog=document.getElementById('glvProg').value.trim(), bud=advBudget();
     if(!prog&&!bud){ out.innerHTML='<div class="prgE">اكتب برنامجك وميزانيتك أولاً (أو اضغط 🎤).</div>'; advAsk(); return; }
-    if(!advC){ var u=window.__glvRef; if(u) advSetC(u.lat,u.lon); else { var c0=map.getCenter(); advSetC(c0.lat,c0.lng); } }
+    await advEnsureC();
     advBusy=true; stopRead(); var id=readId;
     var radius=parseFloat(document.getElementById('glvRad').value)*1000, keys=advKeys(prog);
     advLayer.clearLayers();
     try{
       var city=cityOf(advC.lat,advC.lon);
-      if(!city){ out.innerHTML='<div class="prgE">المنطقة خارج المدن المغطاة (أبعد من 60 كم).</div>'; advBusy=false; return; }
+      if(!city){ out.innerHTML='<div class="prgE">المنطقة خارج المدن المغطاة (أبعد من 60 كم). اضغط «📍 حدّد المنطقة» ثم اضغط على الخريطة قرب مدينة (تونس، سوسة، نابل، المنستير، المهدية…).</div>'; advBusy=false; return; }
       out.innerHTML='<div class="prgR">⏳ فرحوم يحدّد المطاعم في المنطقة…</div>';
       var list=await fetchCity(city), inZone=[], nUnk=0, osm=await advOsm(radius);
       for(var i=0;i<list.length;i+=6){
@@ -3148,8 +3155,8 @@ if('serviceWorker' in navigator){
   var advCache={key:null,zone:null};
   async function advGather(id,out){
     var radius=parseFloat(document.getElementById('glvRad').value)*1000;
-    if(!advC){ var u=window.__glvRef; if(u) advSetC(u.lat,u.lon); else { var c0=map.getCenter(); advSetC(c0.lat,c0.lng); } }
-    var city=cityOf(advC.lat,advC.lon); if(!city) throw new Error('المنطقة خارج المدن المغطاة (أبعد من 60 كم).');
+    await advEnsureC();
+    var city=cityOf(advC.lat,advC.lon); if(!city) throw new Error('المنطقة خارج المدن المغطاة (أبعد من 60 كم). اضغط «📍 حدّد المنطقة» ثم اضغط على الخريطة قرب مدينة.');
     var key=city.c+'|'+advC.lat.toFixed(4)+'|'+advC.lon.toFixed(4)+'|'+radius;
     if(advCache.key===key) return advCache.zone;
     out.innerHTML='<div class="prgR">⏳ فرحوم يحمّل المطاعم والقوائم…</div>';
