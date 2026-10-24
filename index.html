@@ -3009,6 +3009,15 @@ if('serviceWorker' in navigator){
     errs.forEach(function(x){ html+='<div class="prgE">'+esc(x)+'</div>'; });
     out.innerHTML=html;
   }
+  /* مطاعم إضافية (قائمة يدوية بإحداثياتها): مؤشرات على الخريطة فقط، بدون قوائم أو أسعار */
+  var MANUAL=[
+    ['Restaurant Dar Mrad','Tunisien / Local',36.4528,10.7381],['Restaurant El Beji','Tunisien / Traditionnel',36.4512,10.7365],['Restaurant Le Bonheur','Général / Varié',36.4495,10.7402],['Heaven Gates','Restaurant / Lounge',36.4539,10.7421],['Le Patio','Restaurant / Café',36.4501,10.7350],['Le Petit Pêcheur','Poissons / Grillades',36.4550,10.7445],['Dar El Oued','Restauration rapide / Grill',36.4482,10.7339],['Le Golfe','Restauration / Plage',36.4571,10.7470],
+    ['Chez Achour','Grillades / Traditionnel',36.4012,10.6150],['Bel Canto Hammamet','Restaurant / Bar',36.4028,10.6172],['Restaurant Lella Fatma','Traditionnel',36.3985,10.6120],['Barberousse','Poissons / Vue mer (Médina)',36.3965,10.6135],['La Bouillabaisse','Poissons / Méditerranéen',36.4040,10.6190],['Baka Burger','Fast-food / Burgers',36.4055,10.6182],['Burger Home Hammamet','Fast-food / Burgers',36.4010,10.6145],['Le Sindbad','Gastronomique / Plage',36.4150,10.6250],
+    ['Restaurant Le Pirate','Poissons / Fruits de mer (Yasmine)',36.3685,10.5450],['Restaurant Da Franco','Italien / Pizzeria (Hammamet Sud)',36.3750,10.5600],['Fratello Fast Food','Restauration rapide (Hammamet Sud)',36.3720,10.5580],['My Food','Restauration rapide',36.3810,10.5650],['Marina The Captain','Poissons / Ambiance Marina',36.3660,10.5420],
+    ['Snap food','Nabeul (position approximative)',36.4502,10.7392],['Shelby\'s food','Nabeul (position approximative)',36.4507,10.7421],['Cent 6 Fast-food Nabeul','Nabeul (position approximative)',36.4498,10.7365],['Ness cute nabeul','Nabeul (position approximative)',36.4497,10.7381],['Restopizzaria EVERYDAY','Nabeul (position approximative)',36.4477,10.7324],['Roxford','Nabeul (position approximative)',36.4469,10.7311],['MC LOUNGE','Nabeul (position approximative)',36.4456,10.732],['Five food','Nabeul (position approximative)',36.4474,10.736],['Trancetta','Nabeul (position approximative)',36.4465,10.7378],['O.smash burger','Nabeul (position approximative)',36.4467,10.7385],['Top Food Mlewi','Nabeul (position approximative)',36.4468,10.7311],['Elmakhmakh Nabeul','Nabeul (position approximative)',36.4458,10.7291],['El chi5 restaurant Fast food','Nabeul (position approximative)',36.4437,10.7207],['Foodies 90','Nabeul (position approximative)',36.4428,10.7218],['Patty Junkie','Nabeul (position approximative)',36.4422,10.7197],['Betta Food','Nabeul (position approximative)',36.4395,10.7127],['The Corner Hammamet','Hammamet (position approximative)',36.4286,10.6942],['Lella Rayhana','Mrezga / Nabeul (position approximative)',36.4439,10.7207]
+  ];
+  var manLayer=L.layerGroup().addTo(map);
+  MANUAL.forEach(function(r){ L.marker([r[2],r[3]],{icon:L.divIcon({className:'ala-poi',html:'🍴',iconSize:[24,24],iconAnchor:[12,12]}),zIndexOffset:320}).addTo(manLayer).bindPopup('🍴 <b>'+esc(r[0])+'</b><br>'+esc(r[1])); });
   /* ===== 🧞 مستشار فرحوم: يسأل عن البرنامج والميزانية، يقرأ كل القوائم ويقترح المطاعم والأطباق داخل المنطقة ===== */
   var advLayer=L.layerGroup().addTo(map), advC=null, advCircle=null, advBusy=false, advPick=false;
   var SYN=[
@@ -3029,6 +3038,30 @@ if('serviceWorker' in navigator){
     [['viande','لحم','grillade','مشوي','grill','mixed grill','كباب','kebab'],['grill','grillade','viande','kebab','brochette','steak','mechoui','côte','cote']],
     [['couscous','كسكسي','tunisien','تونسي','ma9loub','lablabi','ojja','عجة','لبلابي'],['couscous','ojja','lablabi','brik','tajine','ma9loub','عجة','كسكسي']]
   ];
+  function advGps(la,lo){ return (la!=null&&lo!=null)?'<a href="https://www.google.com/maps/search/?api=1&query='+la+','+lo+'" target="_blank" rel="noopener" title="GPS" style="text-decoration:none">📍</a> ':''; }
+  /* worker restos-tn : GPS de tous les restaurants / fast-foods (OpenStreetMap) autour de la zone */
+  var WR='https://spring-bonus-c1ea.lordsidhom78.workers.dev', osmLayer=L.layerGroup().addTo(map);
+  var osmMem={};
+  async function advOsm(radius){
+    osmLayer.clearLayers();
+    var key=advC.lat.toFixed(3)+'|'+advC.lon.toFixed(3)+'|'+radius, l=osmMem[key];
+    if(!l){
+      l=[];
+      try{
+        /* مباشرة من المتصفح (Overpass يرفض عناوين Cloudflare) — نفس طريقة علاء الدين */
+        var els=await alaFetch('[out:json][timeout:25];nwr["amenity"~"^(restaurant|fast_food)$"]["name"](around:'+Math.round(radius)+','+advC.lat+','+advC.lon+');out center tags;');
+        els.forEach(function(e){ var t=e.tags||{}, la=e.lat!=null?e.lat:(e.center&&e.center.lat), lo=e.lon!=null?e.lon:(e.center&&e.center.lon); if(la==null||!t.name) return; l.push({nom:t.name,cuisine:t.cuisine||null,tel:t.phone||t['contact:phone']||null,lat:la,lon:lo}); });
+        osmMem[key]=l;
+      }catch(e){ l=[]; }
+    }
+    l.forEach(function(x){ L.marker([x.lat,x.lon],{icon:L.divIcon({className:'ala-poi',html:'🍴',iconSize:[22,22],iconAnchor:[11,11]}),zIndexOffset:250}).addTo(osmLayer).bindPopup('🍴 <b>'+esc(x.nom)+'</b>'+(x.cuisine?'<br>'+esc(x.cuisine):'')+(x.tel?'<br>'+esc(x.tel):'')+'<br>'+advGps(x.lat,x.lon)+'GPS'); });
+    return l;
+  }
+  function advMatch(nom,osm){
+    var n=gnorm(nom); if(n.length<3) return null;
+    for(var i=0;i<osm.length;i++){ var o=gnorm(osm[i].nom); if(o&&(o===n||(n.length>=4&&o.indexOf(n)>=0)||(o.length>=4&&n.indexOf(o)>=0))) return osm[i]; }
+    return null;
+  }
   function advNorm(t){ return String(t||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase(); }
   function advKeys(prog){
     var t=advNorm(prog), keys=[], seen={};
@@ -3060,10 +3093,10 @@ if('serviceWorker' in navigator){
       var city=cityOf(advC.lat,advC.lon);
       if(!city){ out.innerHTML='<div class="prgE">المنطقة خارج المدن المغطاة (أبعد من 60 كم).</div>'; advBusy=false; return; }
       out.innerHTML='<div class="prgR">⏳ فرحوم يحدّد المطاعم في المنطقة…</div>';
-      var list=await fetchCity(city), inZone=[], nUnk=0;
+      var list=await fetchCity(city), inZone=[], nUnk=0, osm=await advOsm(radius);
       for(var i=0;i<list.length;i+=6){
         var part=list.slice(i,i+6), geos=await Promise.all(part.map(function(r){ return glvGeo(r,city); }));
-        geos.forEach(function(gp,k){ if(gp&&gp.lat!=null){ if(QT.haversine([advC.lat,advC.lon],[gp.lat,gp.lon])<=radius) inZone.push({r:part[k],lat:gp.lat,lon:gp.lon}); } else { inZone.push({r:part[k],lat:null,lon:null,unk:true}); nUnk++; } });
+        geos.forEach(function(gp,k){ if(gp&&gp.lat!=null){ if(QT.haversine([advC.lat,advC.lon],[gp.lat,gp.lon])<=radius) inZone.push({r:part[k],lat:gp.lat,lon:gp.lon}); } else { var mt=advMatch(part[k].nom,osm); if(mt&&QT.haversine([advC.lat,advC.lon],[mt.lat,mt.lon])<=radius) inZone.push({r:part[k],lat:mt.lat,lon:mt.lon}); else { inZone.push({r:part[k],lat:null,lon:null,unk:true}); nUnk++; } } });
       }
       var dins=[]; try{ (await dinLoad()).forEach(function(d){ if(QT.haversine([advC.lat,advC.lon],[d.lat,d.lon])<=radius) dins.push(d); }); }catch(e){}
       var done=0;
@@ -3098,7 +3131,7 @@ if('serviceWorker' in navigator){
       var sp=[];
       top.forEach(function(t,ix){
         var show=t.dishes.slice(0,3);
-        html+='<div class="prgR"><b>'+(ix+1)+'. <a href="'+esc(t.z.r.lien)+'" target="_blank" rel="noopener" style="color:#ffd966">'+esc(t.z.r.nom)+'</a></b> · '+(t.z.lat!=null?Math.round(t.d)+' م':'📍 الموقع غير معروف')+(t.hits?' ✅':'')+'<br>'+show.map(function(d){ return '• '+esc(d.nom)+' — <b>'+d.prix+' DT</b>'; }).join('<br>')+'</div>';
+        html+='<div class="prgR"><b>'+(ix+1)+'. '+advGps(t.z.lat,t.z.lon)+'<a href="'+esc(t.z.r.lien)+'" target="_blank" rel="noopener" style="color:#ffd966">'+esc(t.z.r.nom)+'</a></b> · '+(t.z.lat!=null?Math.round(t.d)+' م':'📍 الموقع غير معروف')+(t.hits?' ✅':'')+'<br>'+show.map(function(d){ return '• '+esc(d.nom)+' — <b>'+d.prix+' DT</b>'; }).join('<br>')+'</div>';
         if(t.z.lat!=null) L.marker([t.z.lat,t.z.lon],{icon:L.divIcon({className:'ala-poi',html:'<b style="background:#d4af37;color:#0d1a6e;border-radius:50%;padding:2px 7px">'+(ix+1)+'</b>',iconSize:[26,26],iconAnchor:[13,13]}),zIndexOffset:600}).addTo(advLayer).bindPopup('🧞 '+esc(t.z.r.nom)+'<br>'+show.map(function(d){return esc(d.nom)+' — '+d.prix+' DT';}).join('<br>'));
         sp.push({n:t.z.r.nom,d:show});
       });
@@ -3120,10 +3153,10 @@ if('serviceWorker' in navigator){
     var key=city.c+'|'+advC.lat.toFixed(4)+'|'+advC.lon.toFixed(4)+'|'+radius;
     if(advCache.key===key) return advCache.zone;
     out.innerHTML='<div class="prgR">⏳ فرحوم يحمّل المطاعم والقوائم…</div>';
-    var list=await fetchCity(city), zone=[];
+    var list=await fetchCity(city), zone=[], osm=await advOsm(radius);
     for(var i=0;i<list.length;i+=6){
       var part=list.slice(i,i+6), geos=await Promise.all(part.map(function(r){ return glvGeo(r,city); }));
-      geos.forEach(function(gp,k){ if(gp&&gp.lat!=null){ var d=QT.haversine([advC.lat,advC.lon],[gp.lat,gp.lon]); if(d<=radius) zone.push({r:part[k],d:d}); } else zone.push({r:part[k],d:null}); });
+      geos.forEach(function(gp,k){ if(gp&&gp.lat!=null){ var d=QT.haversine([advC.lat,advC.lon],[gp.lat,gp.lon]); if(d<=radius) zone.push({r:part[k],d:d,lat:gp.lat,lon:gp.lon}); } else { var mt=advMatch(part[k].nom,osm); if(mt&&QT.haversine([advC.lat,advC.lon],[mt.lat,mt.lon])<=radius) zone.push({r:part[k],d:QT.haversine([advC.lat,advC.lon],[mt.lat,mt.lon]),lat:mt.lat,lon:mt.lon}); else zone.push({r:part[k],d:null,lat:null,lon:null}); } });
     }
     for(var j=0;j<zone.length;j+=4){
       if(id!==readId) return null;
@@ -3147,13 +3180,13 @@ if('serviceWorker' in navigator){
         z.plats.forEach(function(p){
           var pr=Number(p.prix); if(!isFinite(pr)||pr<=0) return; if(bud&&pr>bud) return;
           var tx=advNorm((p.nom||'')+' '+(p.categorie||''));
-          if(terms.some(function(t){ return tx.indexOf(t)>=0; })) rows.push({resto:z.r.nom,lien:z.r.lien,nom:p.nom,cat:p.categorie||'',prix:pr,d:z.d});
+          if(terms.some(function(t){ return tx.indexOf(t)>=0; })) rows.push({resto:z.r.nom,lien:z.r.lien,lat:z.lat,lon:z.lon,nom:p.nom,cat:p.categorie||'',prix:pr,d:z.d});
         });
       });
       rows.sort(function(a,b){ return a.prix-b.prix||a.resto.localeCompare(b.resto); });
       var html='<div class="prgR"><b>🔎 «'+esc(document.getElementById('glvQ').value)+'» : '+rows.length+' طبق في '+new Set(rows.map(function(r){return r.resto;})).size+' مطعم</b> · قوائم مقروءة: '+nMenu+'/'+zone.length+(bud?' · ≤ '+bud+' DT':'')+'</div>';
       if(!rows.length) html+='<div class="prgE">ما لقيت حتى طبق بهذا الاسم.</div>';
-      html+=rows.map(function(r){ return '<div class="prgR"><a href="'+esc(r.lien)+'" target="_blank" rel="noopener" style="color:#ffd966"><b>'+esc(r.resto)+'</b></a> — '+esc(r.nom)+' — <b>'+r.prix+' DT</b>'+(r.d!=null?' · '+Math.round(r.d)+' م':'')+'</div>'; }).join('');
+      html+=rows.map(function(r){ return '<div class="prgR">'+advGps(r.lat,r.lon)+'<a href="'+esc(r.lien)+'" target="_blank" rel="noopener" style="color:#ffd966"><b>'+esc(r.resto)+'</b></a> — '+esc(r.nom)+' — <b>'+r.prix+' DT</b>'+(r.d!=null?' · '+Math.round(r.d)+' م':'')+'</div>'; }).join('');
       out.innerHTML=html;
     }catch(e){ out.innerHTML='<div class="prgE">'+esc(e.message||e)+'</div>'; }
     advBusy=false;
