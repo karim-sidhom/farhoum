@@ -2788,6 +2788,7 @@ if('serviceWorker' in navigator){
       }
       out.innerHTML=html;
       glvMap();
+      dinMap(ps);
     }catch(e){ out.innerHTML='<div class="prgE">'+esc(e.message||e)+'</div>'; }
     state.busy=false;
   }
@@ -2850,6 +2851,35 @@ if('serviceWorker' in navigator){
       }
     }
     if(out) out.insertAdjacentHTML('afterbegin','<div class="prgR">📍 '+ok+' / '+total+' على الخريطة</div>');
+  }
+  /* مصدر إضافي للمطاعم: قائمة عمومية بإحداثياتها (GPS) وصورة كل مطعم */
+  var DIN_API='https://api.dinner-app.pro', DK='din_cache_v1', dinLayer=L.layerGroup().addTo(map), dinAll=null;
+  async function dinLoad(){
+    if(dinAll) return dinAll;
+    try{ var c=JSON.parse(localStorage.getItem(DK)||'null'); if(c&&Date.now()-c.at<6*3600000&&c.list&&c.list.length){ dinAll=c.list; return dinAll; } }catch(e){}
+    var res=await fetch(DIN_API+'/resto/allresto'); if(!res.ok) throw new Error('HTTP '+res.status);
+    var j=await res.json(), list=[];
+    (j.restaurants||[]).forEach(function(r){
+      var loc=r.location&&r.location[0]; if(!loc) return;
+      var la=Number(loc.latitude), ln=Number(loc.longitude); if(!isFinite(la)||!isFinite(ln)||!la||!ln) return;
+      var img=r.image||null; if(img&&img.indexOf('http')!==0) img=DIN_API+(img.charAt(0)==='/'?'':'/')+img;
+      list.push({nom:r.name,slug:r.slug,adr:loc.adress||'',lat:la,lon:ln,image:img,tel:(r.contact&&r.contact.phone)||''});
+    });
+    dinAll=list; try{ localStorage.setItem(DK,JSON.stringify({at:Date.now(),list:list})); }catch(e){}
+    return list;
+  }
+  async function dinMap(ps){
+    dinLayer.clearLayers(); var out=document.getElementById('glvOut');
+    try{
+      var all=await dinLoad(), n=0, names=[];
+      all.forEach(function(r){
+        var near=ps.some(function(p){ return QT.haversine([p.lat,p.lon],[r.lat,r.lon])<=5000; });
+        if(!near) return; n++; names.push(r.nom);
+        var ic=(r.image&&/^https?:/.test(r.image))?L.divIcon({className:'glv-logo',html:'<img src="'+esc(r.image)+'" referrerpolicy="no-referrer" style="width:34px;height:34px;border-radius:50%;object-fit:cover;border:2px solid #d4af37;background:#fff;box-shadow:0 1px 4px #0006" onerror="this.outerHTML=\'🍽️\'">',iconSize:[34,34],iconAnchor:[17,17]}):L.divIcon({className:'ala-poi',html:'🍽️',iconSize:[24,24],iconAnchor:[12,12]});
+        L.marker([r.lat,r.lon],{icon:ic,zIndexOffset:310}).addTo(dinLayer).bindPopup('🍽️ <b>'+esc(r.nom)+'</b>'+(r.adr?'<br>'+esc(r.adr):'')+(r.tel?'<br>'+esc(r.tel):'')+'<br><a href="https://dinner.tn/menu?code='+encodeURIComponent(r.slug||'')+'" target="_blank" rel="noopener">'+esc(r.nom)+'</a>');
+      });
+      if(out) out.insertAdjacentHTML('afterbegin','<div class="prgR">🍽️ '+n+' / '+all.length+' على الخريطة'+(n?' — '+names.map(esc).join(' · '):'')+'</div>');
+    }catch(e){ if(out) out.insertAdjacentHTML('afterbegin','<div class="prgE">🍽️ '+esc(e.message||e)+'</div>'); }
   }
   function say(txt,lang){ var s=window.speechSynthesis; if(!s) return; var u=new SpeechSynthesisUtterance(txt); u.lang=lang; u.rate=.95; s.speak(u); }
   function readAll(){
