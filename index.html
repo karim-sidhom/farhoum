@@ -1259,7 +1259,7 @@ function alaCatByAr(ar){
   return null;
 }
 /* ذاكرة دائمة (localStorage) لنتائج الخدمات القريبة من الدائرة الخضراء: خلية ~500 م، لا يُعاد البحث الشبكي لموقع سبق رصده */
-var ALA_CACHE_KEY='ala_cache_v1', ALA_CACHE_MAX=400, alaCache=null;
+var ALA_CACHE_KEY='ala_cache_v1', ALA_CACHE_MAX=1200, alaCache=null;
 function alaCLoad(){ if(alaCache) return alaCache; try{ alaCache=JSON.parse(localStorage.getItem(ALA_CACHE_KEY)||'{}')||{}; }catch(e){ alaCache={}; } return alaCache; }
 function alaCKey(u){ return (Math.round(u.lat*200)/200).toFixed(3)+','+(Math.round(u.lon*200)/200).toFixed(3); }
 function alaCSave(ck,res,complete){
@@ -2389,10 +2389,51 @@ function aladdinSync(greens){
     var moved=(st.lat==null)||QT.haversine([st.lat,st.lon],[u.lat,u.lon])>ALA_MOVE;
     if(moved&&!st.queued){ st.queued=true; alaQueue.push(key); }
   });
+  Object.keys(alaState).forEach(function(k){ if(window.__midOn && k.indexOf('mid|')===0) alive[k]=1; });
   Object.keys(alaState).forEach(function(k){ if(!alive[k]){ alaRelease(k); alaStatRelease(k); delete alaState[k]; } });
   if(!alaBusy){ var n=Object.keys(alive).length; if(!n) alaSay('🟢 0'); }
   alaWork();
 }
+/* ===== نقاط منتصف المسافة بين كل محطتين: بحث علاء الدين ===== */
+window.__midOn=false;
+function midPoints(){
+  var seen={}, out=[];
+  QT.trains().forEach(function(t){
+    var st=QT.parseStops(t.stopsText).filter(function(x){return !x.unknown&&x.lat!=null});
+    for(var i=0;i<st.length-1;i++){
+      var a=st[i].name,b=st[i+1].name; if(a===b) continue;
+      var k=a<b?a+'|'+b:b+'|'+a; if(seen[k]) continue; seen[k]=1;
+      out.push({a:a,b:b,lat:(st[i].lat+st[i+1].lat)/2,lon:(st[i].lon+st[i+1].lon)/2});
+    }
+  });
+  return out;
+}
+function midStart(){
+  window.__midOn=true; var n=0;
+  midPoints().forEach(function(m){
+    var key='mid|'+m.a+'|'+m.b;
+    var st=alaState[key]||(alaState[key]={pois:[],lat:null,lon:null,queued:false});
+    st.u={lat:m.lat,lon:m.lon};
+    if(st.lat==null&&!st.queued){ st.queued=true; alaQueue.push(key); n++; }
+  });
+  alaSay('📍 '+n+' نقطة منتصف بين المحطات'); alaWork();
+}
+function midStop(){
+  window.__midOn=false;
+  Object.keys(alaState).forEach(function(k){ if(k.indexOf('mid|')===0){ alaRelease(k); alaStatRelease(k); delete alaState[k]; } });
+  alaQueue=alaQueue.filter(function(k){ return k.indexOf('mid|')!==0; });
+}
+(function(){
+  var b=document.createElement('button'); b.id='midBtn'; b.textContent='📍'; b.title='منتصف المحطات';
+  var a=document.getElementById('glvBtn')||document.getElementById('prgBtn')||document.getElementById('sat');
+  if(a&&a.parentNode) a.parentNode.insertBefore(b,a.nextSibling); else document.body.appendChild(b);
+  b.onclick=function(){ window.__midManual=true; if(window.__midOn){ midStop(); b.style.outline=''; alaSay('📍 off'); } else { midStart(); b.style.outline='2px solid #d4af37'; } };
+  /* تشغيل تلقائي بدون لمس أي شيء */
+  var tries=0, iv=setInterval(function(){
+    tries++; if(window.__midManual||tries>60){ clearInterval(iv); return; }
+    try{ if(QT.trains().length&&midPoints().length){ clearInterval(iv); midStart(); b.style.outline='2px solid #d4af37'; } }catch(e){}
+  },2000);
+})();
 /* حركة سلسة مستمرة لموقع المستخدم (بدل القفز عند كل تحديث) */
 var glide={};
 function glideTo(key,u,m,c){
@@ -2703,6 +2744,13 @@ if('serviceWorker' in navigator){
       var r=await fetch(W+'/restos'); if(!r.ok) throw new Error('HTTP '+r.status); var j=await r.json();
       list=(j.restos||[]).map(function(x){ return {nom:x.nom,lien:x.lien}; });
     } else {
+      /* مسار /restos مع معاملات المدينة (city, lat, lng, addr, ville) ثم الرجوع إلى /page */
+      try{
+        var cap=c.slug.charAt(0).toUpperCase()+c.slug.slice(1);
+        var r1=await fetch(W+'/restos?city='+c.c+'&lat='+c.lat+'&lng='+c.lon+'&addr='+encodeURIComponent(cap)+'&ville='+c.slug+'&cat=restaurants_1&nocache=1');
+        if(r1.ok){ var j1=await r1.json(); list=(j1.restos||[]).map(function(x){ return {nom:x.nom,lien:x.lien}; }); }
+      }catch(e1){ list=[]; }
+      if(list.length){ cache[k]={at:Date.now(),list:list}; save(); return list; }
       var r2=await fetch(W+'/page/tn/fr/'+c.slug+'/restaurants_1/?city='+c.c+'&lat='+c.lat+'&lng='+c.lon+'&addr='+encodeURIComponent(c.slug)); if(!r2.ok) throw new Error('HTTP '+r2.status);
       var doc=new DOMParser().parseFromString(await r2.text(),'text/html'), seen={};
       doc.querySelectorAll('a[href*="/stores/"]').forEach(function(a){
