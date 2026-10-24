@@ -46,11 +46,6 @@ html,body{margin:0;height:100%;background:#0d1a6e;font-family:system-ui,sans-ser
 .risk-panel b{color:#d4af37}.risk-panel .r{padding:2px 0;border-bottom:1px solid #ffffff22}.risk-panel .hi{color:#ff5a5a;font-weight:700}
 .train-label{background:#0d1a6e;color:#fff;border:1px solid #d4af37;font-weight:700;font-size:11px;padding:1px 4px}
 
-#gate{position:fixed;inset:0;z-index:99999;background:#0d1a6e;display:flex;align-items:center;justify-content:center;direction:rtl}
-#gate .box{background:#020b2e;border:1px solid #d4af37;border-radius:12px;padding:24px 22px;width:min(320px,86vw);text-align:center;color:#fff}
-#gate input{width:100%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid #d4af37;background:#0d1a6e;color:#fff;font-size:18px;text-align:center;margin:14px 0 10px;direction:ltr}
-#gate button{width:100%;padding:10px;border:0;border-radius:8px;background:#d4af37;color:#0d1a6e;font-weight:700;font-size:16px;cursor:pointer}
-#gate .err{color:#ff5a5a;min-height:20px;font-size:14px;margin-top:8px}
 </style>
 </head>
 <body>
@@ -1250,7 +1245,8 @@ function alaAdd(key,u,c,els){
   if(!o){
     var m=L.marker([best.la,best.ln],{icon:L.divIcon({className:'ala-poi',html:c.e,iconSize:[24,24],iconAnchor:[12,12]}),zIndexOffset:200}).addTo(alaLayer).bindPopup(tip);
     o=alaPoi[pk]={m:m,users:{}};
-  } else o.m.setPopupContent(tip);
+    if(c.ar==='جامع'&&!best.app) alaStatMosque(m,{name:best.name,lat:best.la,lon:best.ln},c,'');
+  } else if(!(c.ar==='جامع'&&!best.app)) o.m.setPopupContent(tip);
   if(c.ar==='جامع'&&best.app&&best.mw) alaMosqueReg(o.m,best.mw);
   o.users[key]=1; st.pois.push(pk); (st.found=st.found||[]).push({ar:c.ar,id:best.id,lat:best.la,lon:best.ln,name:best.name}); return 1;
 }
@@ -2488,7 +2484,7 @@ function alaStatMosque(m,h,c,stn){
       var mw=poi&&poi.mawaqit?poi.mawaqit:false;
       m.setPopupContent(alaAppCard({name:h.name,d:(function(r){ return QT.haversine([h.lat,h.lon],[r.lat,r.lon]); })(window.__glvRef||{lat:h.lat,lon:h.lon}),la:h.lat,ln:h.lon,mw:mw},c));
       if(mw){ done=true; alaMosqueReg(m,mw); }
-    }).catch(function(){ loading=false; m.setPopupContent(c.e+' '+esc(h.name)+'<br>'+esc(c.ar)+' · قرب محطة '+esc(stn)+'<br>تعذّر جلب المواقيت'); });
+    }).catch(function(){ loading=false; m.setPopupContent(c.e+' '+esc(h.name)+'<br>'+esc(c.ar)+(stn?' · قرب محطة '+esc(stn):'')+'<br>تعذّر جلب المواقيت'); });
   }
   m.on('popupopen',load);
 }
