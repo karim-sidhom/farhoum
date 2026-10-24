@@ -2732,7 +2732,7 @@ if('serviceWorker' in navigator){
 /* ===== 🍔 Glovo: بين محطتين، مطاعم Glovo حول المحطتين الأقربتين وحول موقعك، مع قراءة صوتية (محطة بمحطة) عبر worker Glovo Tunisie ===== */
 (function(){
   var W='https://glovo.lordsidhom78.workers.dev', TTL=30*60000, CK='glv_cache_v1';
-  var CITIES=[{c:'TIS',slug:'tunis',ar:'تونس',lat:36.80,lon:10.18},{c:'SFX',slug:'sfax',ar:'صفاقس',lat:34.74,lon:10.76},{c:'SOU',slug:'sousse',ar:'سوسة',lat:35.83,lon:10.64},{c:'MDH',slug:'mahdia',ar:'المهدية',lat:35.50,lon:11.06},{c:'GBS',slug:'gabes',ar:'قابس',lat:33.88,lon:10.10},{c:'MST',slug:'monastir',ar:'المنستير',lat:35.78,lon:10.83},{c:'DJR',slug:'djerba',ar:'جربة',lat:33.81,lon:10.85},{c:'NBL',slug:'nabeul',ar:'نابل',lat:36.45,lon:10.73}];
+  var CITIES=[{c:'TIS',slug:'tunis',ar:'تونس',lat:36.80,lon:10.18},{c:'SFX',slug:'sfax',ar:'صفاقس',lat:34.74,lon:10.76},{c:'SOU',slug:'sousse',ar:'سوسة',lat:35.83,lon:10.64},{c:'MDH',slug:'mahdia',ar:'المهدية',lat:35.50,lon:11.06},{c:'GBS',slug:'gabes',ar:'قابس',lat:33.88,lon:10.10},{c:'MST',slug:'monastir',ar:'المنستير',lat:35.78,lon:10.83},{c:'DJR',slug:'djerba',ar:'جربة',lat:33.81,lon:10.85},{c:'NBL',slug:'nabeul-hammamet',ar:'نابل',lat:36.45,lon:10.73}];
   var cache={}; try{ cache=JSON.parse(localStorage.getItem(CK)||'{}')||{}; }catch(e){}
   function save(){ try{ localStorage.setItem(CK,JSON.stringify(cache)); }catch(e){} }
   function cityOf(lat,lon){ var b=null,bd=1e12; CITIES.forEach(function(c){ var d=QT.haversine([lat,lon],[c.lat,c.lon]); if(d<bd){bd=d;b=c;} }); return bd<=60000?b:null; }
@@ -2751,7 +2751,7 @@ if('serviceWorker' in navigator){
         if(r1.ok){ var j1=await r1.json(); list=(j1.restos||[]).map(function(x){ return {nom:x.nom,lien:x.lien}; }); }
       }catch(e1){ list=[]; }
       if(list.length){ cache[k]={at:Date.now(),list:list}; save(); return list; }
-      var r2=await fetch(W+'/page/tn/fr/'+c.slug+'/restaurants_1/?city='+c.c+'&lat='+c.lat+'&lng='+c.lon+'&addr='+encodeURIComponent(c.slug)); if(!r2.ok) throw new Error('HTTP '+r2.status);
+      var r2=await fetch(W+'/page/fr/tn/'+c.slug+'/categories/restaurants_1?city='+c.c+'&lat='+c.lat+'&lng='+c.lon+'&addr='+encodeURIComponent(c.slug)); if(!r2.ok) throw new Error('HTTP '+r2.status);
       var doc=new DOMParser().parseFromString(await r2.text(),'text/html'), seen={};
       doc.querySelectorAll('a[href*="/stores/"]').forEach(function(a){
         var h=a.getAttribute('href')||'', m=/\/stores\/([^/?#]+)/.exec(h); if(!m||seen[m[1]]) return; seen[m[1]]=1;
