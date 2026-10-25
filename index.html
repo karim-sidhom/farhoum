@@ -689,18 +689,14 @@ function nearestPointOnTrackCoords(pt, coords){
   return best;
 }
 function snapToNearestTrack(lat, lon, maxDistM){
-  // أقرب نقطة بين: RAIL_LINES (المرسومة) + المسارات الرسمية + مسارات OSM المحمّلة
   const pt=[lat,lon];
   let best=null;
-  if(typeof kz_nearestOnTrackRLPoint==='function' && typeof RAIL_LINES!=='undefined' && RAIL_LINES.length){
-    const q = kz_nearestOnTrackRLPoint(lat, lon, null);
-    if(q) best={dist:q.dist, lat:q.lat, lon:q.lon};
-  }
-  osmTracks.forEach(track=>{
+  allTrackLists().forEach(track=>{
     const r = nearestPointOnTrackCoords(pt, track.coords);
     if(r && (!best || r.dist<best.dist)) best=r;
   });
   if(!best) return {lat,lon};
+  if(maxDistM!=null && best.dist>maxDistM) return {lat,lon};
   return {lat:best.lat, lon:best.lon};
 }
 function darkenHex(hex, amt){
@@ -882,24 +878,6 @@ function trainPositionNowRaw(train){
     const t0=times[i].getTime(), t1=times[i+1].getTime();
     if(t>=t0 && t<=t1){
       const frac = t1===t0 ? 0 : (t-t0)/(t1-t0);
-      // السير على منحنى السكة الفعلي بين المحطتين بدل الخط المستقيم
-      try{
-        const sp = kz_getTrackSubPath([stops[i].lat,stops[i].lon],[stops[i+1].lat,stops[i+1].lon],stops[i].name,stops[i+1].name);
-        if(sp && sp.length>1){
-          const full=[[stops[i].lat,stops[i].lon]].concat(sp,[[stops[i+1].lat,stops[i+1].lon]]);
-          let tot=0; const seg=[];
-          for(let k=0;k<full.length-1;k++){ const d=haversineTN(full[k],full[k+1]); seg.push(d); tot+=d; }
-          let target=tot*frac, acc=0;
-          for(let k=0;k<seg.length;k++){
-            if(acc+seg[k]>=target || k===seg.length-1){
-              const f = seg[k]===0 ? 0 : Math.min(1,Math.max(0,(target-acc)/seg[k]));
-              return {lat: full[k][0]+(full[k+1][0]-full[k][0])*f, lon: full[k][1]+(full[k+1][1]-full[k][1])*f,
-                fromStation: stops[i].name, toStation: stops[i+1].name, delayMin};
-            }
-            acc+=seg[k];
-          }
-        }
-      }catch(e){}
       return {
         lat: stops[i].lat + (stops[i+1].lat-stops[i].lat)*frac,
         lon: stops[i].lon + (stops[i+1].lon-stops[i].lon)*frac,
