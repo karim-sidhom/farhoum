@@ -4443,42 +4443,7 @@ if('serviceWorker' in navigator){
     res.sort(function(x,y){ return y.score-x.score; });
     return res.slice(0,4);
   }
-  /* ===== F2 : TOUTES les recherches (pizza, sandwich, mosquée, pharmacie, café…) passent d'abord par farhoum2.kieda.online (iframe invisible ?bridge=1) ; si farhoum2 ne répond pas ou ne trouve rien, la recherche d'avant (ci-dessous) reste le secours ===== */
-  var F2_ORIGIN='https://farhoum2.kieda.online', f2Frame=null, f2Up=false, f2ReadyP=null, f2ReadyFn=null, f2Pend={}, f2Seq=0, f2DeadUntil=0;
-  window.addEventListener('message',function(ev){
-    if(ev.origin!==F2_ORIGIN) return; var d=ev.data; if(!d||typeof d!=='object') return;
-    if(d.type==='f2-ready'){ f2Up=true; if(f2ReadyFn) f2ReadyFn(true); }
-    else if(d.type==='f2-res'){ var p=f2Pend[d.id]; if(p){ delete f2Pend[d.id]; clearTimeout(p.timer); p.done(d.ok&&Array.isArray(d.cands)?d.cands:null); } }
-  });
-  function f2Boot(){
-    if(f2Frame) return f2Frame;
-    f2ReadyP=new Promise(function(res){ f2ReadyFn=res; setTimeout(function(){ res(false); },15000); });
-    var f=document.createElement('iframe'); f.id='f2Hidden'; f.setAttribute('aria-hidden','true'); f.tabIndex=-1;
-    f.style.cssText='position:fixed;left:-9999px;top:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none';
-    f.addEventListener('load',function(){ try{ f.contentWindow.postMessage({type:'f2-ping'},F2_ORIGIN); }catch(e){} });
-    f.src=F2_ORIGIN+'/?bridge=1'; document.body.appendChild(f); f2Frame=f; return f;
-  }
-  async function f2Cands(mod,a,keys,bud,opts){
-    if(!f2Up&&Date.now()<f2DeadUntil) return null;
-    var f=f2Boot(); if(!f2Up) await f2ReadyP;
-    if(!f2Up||!f.contentWindow){ f2DeadUntil=Date.now()+180000; return null; }
-    var ek=(opts&&opts.keys)||(mod.food==='cafe'?CAFE_KEYS:keys)||[];
-    return new Promise(function(done){
-      var id=++f2Seq, timer=setTimeout(function(){ if(f2Pend[id]){ delete f2Pend[id]; done(null); } },35000);
-      f2Pend[id]={done:done,timer:timer};
-      try{ f.contentWindow.postMessage({type:'f2-find',id:id,mod:{id:mod.id,ar:mod.ar,cat:mod.cat,food:mod.food||null},a:a,keys:ek,bud:bud||null,salati:!!(opts&&opts.salati)},F2_ORIGIN); }
-      catch(e){ delete f2Pend[id]; clearTimeout(timer); done(null); }
-    });
-  }
   async function candidatesFor(mod,a,keys,bud,opts){
-    /* F2 d'abord : farhoum2 cherche et renvoie les lieux (avec menus/prix pour les restos) ; vide ou muet → ancienne recherche */
-    var viaF2=null; try{ viaF2=await f2Cands(mod,a,keys,bud,opts); }catch(e){ viaF2=null; }
-    if(viaF2){ viaF2=viaF2.filter(function(c){ return c&&isFinite(c.lat)&&isFinite(c.lon); }); }
-    if(viaF2&&viaF2.length){
-      var per2=bud?bud:null;
-      viaF2.forEach(function(c){ c.dishes=c.dishes||[]; c.picked=c.picked||{}; c.d0=QT.haversine(a,[c.lat,c.lon]); if(c.dishes.length){ var d02=c.dishes[0]; if(!per2||d02.prix<=per2) c.picked[0]=true; } });
-      return viaF2;
-    }
     var osmP=osmNear(mod,a[0],a[1]), osm=[], cands=[]; osmP.catch(function(){});
     if(mod.food){
       var zone=[]; try{ G.setC(a[0],a[1]); zone=await G.gather(G.getId(),document.createElement('div'),1500)||[]; }catch(e){ zone=[]; }
@@ -4565,8 +4530,6 @@ if('serviceWorker' in navigator){
     if(!ids.length&&pts.length<2){ out.innerHTML='<div class="prgE">اكتب برنامجك أو اختر نمطاً (💊 ☕ 🍽️ …) ثم اضغط «اصنع البرنامج».</div>'; bubble('شنيّة برنامجك؟ قلّي وين تمشي وشنوّة تحب (صيدلية، قهوة، مطعم…)'); speak([['شنيّة برنامجك؟ قلّي وين تمشي وشنوّة تحب','ar-SA']]); return; }
     try{ setCostume(opts.kind==='brief'?null:costumeOf(ids),text); }catch(e){} gen.classList.remove('dim'); back.classList.remove('dim'); if(!opts.ids) setChips(ids); busy=true; $('fhGo').disabled=true;
     out.innerHTML='<div class="prgR">⏳ فرحوم يحضّر البرنامج…</div>'; bubble('نحضّر لك البرنامج… دقيقة');
-    /* demande vocale : le panneau s'affiche tout de suite (avancement, puis résultats ou erreur) */
-    if(window.__askNext){ panel.classList.add('fhList'); panel.style.display='block'; }
     try{
       var bud=budget(), dayOff=opts.dayOff!=null?opts.dayOff:(/غدوة|غدا|غدًا|demain/i.test(text)?1:0), legs=[], routeRows=[], anchor=null, cur=null;
       if(pts.length>=2){
@@ -4597,7 +4560,7 @@ if('serviceWorker' in navigator){
       prog={legs:legs,routeRows:routeRows,anchor:anchor,start:cur,dayOff:dayOff,steps:steps,bud:bud,text:text,kind:opts.kind||'program',meal:opts.meal||null,intro:opts.intro||null};
       if(opts.prayer) prog.pray=await prayerTimes(anchor.pt); if(my!==buildSeq) return;
       autoSelect(); retime(); render(true); if(window.__askNext){ window.__askNext=false; if(ids.some(function(x){ return ['pharm','hosp','dent','vet','optic'].indexOf(x)>=0; })) speak([['إن شاء الله لاباس','ar-SA']],true); askMap(); }
-    }catch(e){ if(my!==buildSeq) return; out.innerHTML='<div class="prgE">'+esc(e&&e.message||e)+'</div>'; bubble('وقعت مشكلة'); if(window.__askNext){ panel.classList.add('fhList'); panel.style.display='block'; } }
+    }catch(e){ if(my!==buildSeq) return; out.innerHTML='<div class="prgE">'+esc(e&&e.message||e)+'</div>'; bubble('وقعت مشكلة'); }
     if(my===buildSeq){ busy=false; $('fhGo').disabled=false; }
   }
   function dayIdx(extra){ var d=new Date(Date.now()+((prog?prog.dayOff:0)+(extra||0))*86400000); return (d.getDay()+6)%7; }
