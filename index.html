@@ -204,7 +204,8 @@ body.noVoice #fhRow{display:flex!important}
 #scBack{display:none;position:fixed;bottom:calc(26px + env(safe-area-inset-bottom));right:90px;z-index:1105;width:42px;height:42px;border-radius:50%;border:2px solid #d4af37;background:#0d1a6eE6;color:#ffe566;font-size:20px;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.45);padding:0}
 body.mapOpen #scBack{display:block}
 /* Farhoum seul : aucune barre en bas (panneau, badge de statut) */
-body:not(.noVoice) #fhPanel{display:none!important}
+body:not(.noVoice) #fhPanel:not(.fhList){display:none!important}
+#fhTop{display:none!important}
 svg.cosHat path[fill="#5fc7e8"],svg.cosHat circle[cx="238"][cy="6"],svg.cosHat path[stroke="#2f86c8"]{display:none}
 #alabadge{display:none!important}
 
@@ -4256,11 +4257,11 @@ if('serviceWorker' in navigator){
   function stopMusic(){ clearTimeout(idhT); for(var k in idhFrames) idhSendTo(k,'idh-pause'); musicOn=false; try{ if(window.__scene) window.__scene.dance(false); }catch(e){} bubble('حاضر'); speak([['حاضر','ar-SA']]); }
   window.addEventListener('message',function(ev){ if(ev.origin!==IDHS.idh&&ev.origin!==IDHS.sudo) return; var d=ev.data; if(d&&d.type==='idh-state'&&d.playing){ clearTimeout(idhT); } });
   function yesNo(t){ t=' '+String(t||'').toLowerCase().replace(/[،؟?!.,]/g,' ')+' '; var no=/\s(لا|لأ|لاء|non|no|موش|بلا|خليها|ما نحبش|مانحبش|nope)\s/.test(t), yes=/\s(نعم|اي|ايه|إيه|ايوه|أيوه|برشا|باهي|وري|وريني|افتح|حل|اه|أه|oui|yes|ok|ouais|ouvre|montre|d'accord)\s/.test(t); if(yes&&!no) return 'y'; if(no&&!yes) return 'n'; return null; }
-  function askMap(){ awaitMap=true; bubble('🗺️ تحب تشوف الخريطة ولا لا؟'); speak([['تحب تشوف الخريطة ولا لا؟','ar-SA']]); }
+  function askMap(){ awaitMap=true; bubble('🗺️ تحب تشوف الخريطة ولا لا؟'); speak([['تحب تشوف الخريطة ولا لا؟','ar-SA']],true); }
   function mapAnswer(t){ if(!awaitMap) return false; var a=yesNo(t); if(!a){ awaitMap=false; return false; } awaitMap=false; if(a==='y'){ try{ if(window.__scene) window.__scene.openMap('ask'); }catch(e){} bubble('تفضل، هذه الخريطة'); speak([['تفضل، هذه الخريطة','ar-SA']]); } else { bubble('حاضر'); speak([['حاضر','ar-SA']]); } return true; }
-  function speak(parts){
-    try{ G.stopRead(); }catch(e){}
-    var s=window.speechSynthesis; if(!s) return; spk=0;
+  function speak(parts,q){
+    if(!q){ try{ G.stopRead(); }catch(e){} }
+    var s=window.speechSynthesis; if(!s) return; if(!q) spk=0;
     parts.forEach(function(p){
       var u=new SpeechSynthesisUtterance(p[0]); u.lang=p[1]||'ar-SA'; u.rate=.95; spk++;
       u.onstart=function(){ talk(true); }; u.onend=u.onerror=function(){ spk--; if(spk<=0){ spk=0; talk(false); } };
@@ -4522,7 +4523,7 @@ if('serviceWorker' in navigator){
     var sel=opts.ids?[]:chosen(), det=detectMods(text), ids=opts.ids||det.concat(sel.filter(function(x){ return det.indexOf(x)<0; }));
     var pts=text?P.parse(text.replace(/[،؛؟]/g,' ')):[];
     if(!ids.length&&pts.length<2){ out.innerHTML='<div class="prgE">اكتب برنامجك أو اختر نمطاً (💊 ☕ 🍽️ …) ثم اضغط «اصنع البرنامج».</div>'; bubble('شنيّة برنامجك؟ قلّي وين تمشي وشنوّة تحب (صيدلية، قهوة، مطعم…)'); speak([['شنيّة برنامجك؟ قلّي وين تمشي وشنوّة تحب','ar-SA']]); return; }
-    try{ setCostume(costumeOf(ids),text); }catch(e){} gen.classList.remove('dim'); back.classList.remove('dim'); if(!opts.ids) setChips(ids); busy=true; $('fhGo').disabled=true;
+    try{ setCostume(costumeOf(ids),text); }catch(e){} gen.classList.remove('dim'); back.classList.remove('dim'); if(!opts.ids) setChips(ids); busy=true; $('fhGo').disabled=true; var wt=setInterval(function(){ if(my!==buildSeq||!busy){ clearInterval(wt); return; } speak([['مازلت نلوّج لك، ثواني','ar-SA']],true); },9000);
     out.innerHTML='<div class="prgR">⏳ فرحوم يحضّر البرنامج…</div>'; bubble('نحضّر لك البرنامج… دقيقة');
     try{
       var bud=budget(), dayOff=opts.dayOff!=null?opts.dayOff:(/غدوة|غدا|غدًا|demain/i.test(text)?1:0), legs=[], routeRows=[], anchor=null, cur=null;
@@ -4553,9 +4554,9 @@ if('serviceWorker' in navigator){
       }
       prog={legs:legs,routeRows:routeRows,anchor:anchor,start:cur,dayOff:dayOff,steps:steps,bud:bud,text:text,kind:opts.kind||'program',meal:opts.meal||null,intro:opts.intro||null};
       if(opts.prayer) prog.pray=await prayerTimes(anchor.pt); if(my!==buildSeq) return;
-      autoSelect(); retime(); render(true); if(window.__askNext){ window.__askNext=false; if(ids.some(function(x){ return ['pharm','hosp','dent','vet','optic'].indexOf(x)>=0; })) speak([['إن شاء الله لاباس','ar-SA']]); askMap(); }
-    }catch(e){ if(my!==buildSeq) return; out.innerHTML='<div class="prgE">'+esc(e&&e.message||e)+'</div>'; bubble('وقعت مشكلة'); }
-    if(my===buildSeq){ busy=false; $('fhGo').disabled=false; }
+      autoSelect(); retime(); render(true); if(window.__askNext){ window.__askNext=false; if(ids.some(function(x){ return ['pharm','hosp','dent','vet','optic'].indexOf(x)>=0; })) speak([['إن شاء الله لاباس','ar-SA']],true); askMap(); }
+    }catch(e){ if(my!==buildSeq) return; out.innerHTML='<div class="prgE">'+esc(e&&e.message||e)+'</div>'; bubble('وقعت مشكلة'); speak([['وقعت مشكلة، عاود من فضلك','ar-SA']]); }
+    clearInterval(wt); if(my===buildSeq){ busy=false; $('fhGo').disabled=false; }
   }
   function dayIdx(extra){ var d=new Date(Date.now()+((prog?prog.dayOff:0)+(extra||0))*86400000); return (d.getDay()+6)%7; }
   /* اختيار أحسن مكان لكل نشاط: مفتوح (أو مجهول) ثم الأقرب */
@@ -4616,14 +4617,14 @@ if('serviceWorker' in navigator){
     if(prog.steps.some(function(s){ return s.cands[s.sel]&&s.cands[s.sel].dishes.length; }))
       h+='<div class="prgR" style="'+(over?'background:#ff3b3066':'')+'"><b>💰 المجموع: '+fmtP(g)+'</b>'+(prog.bud?' / الميزانية '+fmtP(prog.bud)+(over?' ⚠️ أكثر من الميزانية':' ✅'):'')+'</div>';
     if(prog.legs.length) h+='<button class="fhFit" data-m="all">🚆 كل المسار</button><button class="fhFit" data-m="act">🔍 الأنشطة</button>';
-    out.innerHTML=h; gen.classList.add('dim'); back.classList.add('dim'); drawMap();
+    out.innerHTML=h; panel.classList.add('fhList'); panel.style.display='block'; gen.classList.add('dim'); back.classList.add('dim'); drawMap();
     if(speakIt){
       var kd=prog.kind;
       bubble(kd==='program'?'هذا البرنامج اللي اقترحته عليك — الأسهم والساعات والأسعار على الخريطة':(prog.intro||'تفضّل'));
       var sp=[[prog.intro||'هذا برنامجك','ar-SA']];
       prog.routeRows.forEach(function(r){ if(!r.lg) return; var lg=r.lg; sp.push(['القطار من','ar-SA'],[lg.tr.stops[lg.a].name,'fr-FR'],['على الساعة '+spokenTime(lg.dep)+' إلى','ar-SA'],[lg.tr.stops[lg.b].name,'fr-FR'],['على الساعة '+spokenTime(lg.arr),'ar-SA']); });
       var g=grand();
-      prog.steps.forEach(function(s){ var c=s.cands[s.sel]; if(!c) return; var lab=(prog.meal&&s.mod.food)?prog.meal:s.mod.ar;
+      prog.steps.forEach(function(s){ var c=s.cands[s.sel]; if(!c){ sp.push(['ما لقيت '+s.mod.ar+' قريبة من هذه المنطقة','ar-SA']); return; } var lab=(prog.meal&&s.mod.food)?prog.meal:s.mod.ar;
         if(s.mod.id==='mosque'){ sp.push(['أقرب جامع','ar-SA'],[c.nom,'fr-FR'],['يبعد '+(s.dist<1000?Math.round(s.dist)+' متر':(s.dist/1000).toFixed(1)+' كيلومتر'),'ar-SA']); prayText().forEach(function(x){ sp.push(x); }); return; }
         sp.push([lab+(kd==='program'?' على الساعة '+spokenTime(s.t0):''),'ar-SA'],[c.nom,'fr-FR']);
         if(c.hours&&s.open!=null) sp.push([s.open?'مفتوح الآن':'مغلق في هذا الوقت','ar-SA']);
@@ -4678,7 +4679,7 @@ if('serviceWorker' in navigator){
     return build({ids:['mosque'],kind:'prayer',prayer:true,salati:true,intro:'هذا أقرب جامع ومواقيت الصلاة'});
   }
   function answerSimple(txt,html){
-    var out=$('fhOut'); out.innerHTML='<div class="prgR">'+(html||esc(txt))+'</div>'; bubble(txt); speak([[txt,'ar-SA']]);
+    var out=$('fhOut'); out.innerHTML='<div class="prgR">'+(html||esc(txt))+'</div>'; panel.classList.add('fhList'); panel.style.display='block'; bubble(txt); speak([[txt,'ar-SA']]);
   }
   function riskStatus(){
     if(!myP) return 'ما عنديش موقعك بعد — فعّل الـGPS.';
@@ -4700,7 +4701,7 @@ if('serviceWorker' in navigator){
   ];
   function intentOf(t){ for(var i=0;i<INTENTS.length;i++) if(INTENTS[i].re.test(t)) return INTENTS[i].id; return null; }
   async function go(){
-    try{ setCostume(null); }catch(e){}
+    try{ setCostume(null); }catch(e){} panel.classList.remove('fhList');
     var text=$('fhTxt').value.trim(), sel=chosen(), pts=text?P.parse(text.replace(/[،؛؟]/g,' ')):[], mods=detectMods(text);
     if(text&&pts.length<2&&!sel.length&&mods.length<=1){
       var it=intentOf(text);
@@ -4896,7 +4897,7 @@ if('serviceWorker' in navigator){
   function unlockA(){ ensureAudio(); document.removeEventListener('click',unlockA,true); document.removeEventListener('touchstart',unlockA,true); }
   document.addEventListener('click',unlockA,true); document.addEventListener('touchstart',unlockA,true); startWatch();
   function openP(){ try{ if(window.__scene) window.__scene.listenOn(); }catch(e){} panel.style.display='block'; gen.classList.add('on'); back.classList.add('on'); gen.classList.remove('dim'); back.classList.remove('dim'); var a=$('prgPanel'), b=$('glvPanel'); if(a) a.style.display='none'; if(b) b.style.display='none'; ensureAudio(); startWatch(); if(!panel.dataset.hi){ panel.dataset.hi='1'; speak([['شبيك لبيك','ar-SA']]); briefing(); } }
-  function closeP(){ try{ setCostume(null); }catch(e){} try{ if(window.__scene) window.__scene.listenOff(); }catch(e){} panel.style.display='none'; gen.classList.remove('on'); back.classList.remove('on'); try{ G.stopRead(); }catch(e){} talk(false); }
+  function closeP(){ try{ setCostume(null); }catch(e){} panel.classList.remove('fhList'); try{ if(window.__scene) window.__scene.listenOff(); }catch(e){} panel.style.display='none'; gen.classList.remove('on'); back.classList.remove('on'); try{ G.stopRead(); }catch(e){} talk(false); }
   btn.onclick=function(){ if(panel.style.display==='block') closeP(); else openP(); };
   $('fhX').onclick=closeP;
   $('fhGo').onclick=go; $('fhBrief').onclick=function(){ ensureAudio(); startWatch(); briefing(); };
@@ -4923,7 +4924,7 @@ if('serviceWorker' in navigator){
     var t=e.target; if(!prog||!t.classList||!t.classList.contains('fhDish')) return;
     var s=prog.steps[+t.dataset.s], c=s.cands[s.sel]; c.picked[+t.dataset.d]=t.checked; render(false);
   });
-  window.__fh={ask:function(t){ if(musicOn){ if(/وقف|أوقف|اوقف|اطفئ|أطفئ|سكر|سكّر|stop|arr[êe]te|ferme/i.test(t)){ stopMusic(); return; } if(!/فرحوم|فرهوم|farhoum/i.test(t)) return; } bubble('🎤 '+t); if(mapAnswer(t)) return; awaitMap=false; try{ if(!intentOf(t)) ackSearch(t); }catch(e){} setChips([]); $('fhTxt').value=t; window.__askNext=true; var r=go(); Promise.resolve(r).then(function(){ window.__askNext=false; },function(){ window.__askNext=false; }); return r; },hint:bubble,panelHidden:function(){ return panel.style.display!=='block'; },sceneOpen:function(){ panel.style.display='block'; gen.classList.add('on'); back.classList.add('on'); gen.classList.remove('dim'); back.classList.remove('dim'); ensureAudio(); startWatch(); panel.dataset.hi='1'; },sceneBrief:function(){ briefing(); },closePanel:closeP,costume:setCostume,build:build,go:go,state:function(){ return prog; },ohOpen:ohOpen,detectMods:detectMods,riskTick:riskTick,setMyPos:function(la,lo){ myP={lat:la,lon:lo,t:Date.now()}; },isAlarm:function(){ return alarm; },qMsg:function(d){ window.dispatchEvent(new MessageEvent('message',{data:d,origin:'https://quitari.kieda.online'})); },intentOf:intentOf,briefing:briefing};
+  window.__fh={ask:function(t){ if(musicOn){ if(/وقف|أوقف|اوقف|اطفئ|أطفئ|سكر|سكّر|stop|arr[êe]te|ferme/i.test(t)){ stopMusic(); return; } if(!/فرحوم|فرهوم|farhoum/i.test(t)) return; } if(/^\s*(je te cherche|je cherche|نلوّج لك|شنيّة برنامجك|نحضّر لك)/i.test(t)) return; if(busy&&!detectMods(t).length) return; bubble('🎤 '+t); if(mapAnswer(t)) return; awaitMap=false; try{ if(!intentOf(t)) ackSearch(t); }catch(e){} setChips([]); $('fhTxt').value=t; window.__askNext=true; var r=go(); Promise.resolve(r).then(function(){ window.__askNext=false; },function(){ window.__askNext=false; }); return r; },hint:bubble,panelHidden:function(){ return panel.style.display!=='block'; },sceneOpen:function(){ panel.style.display='block'; gen.classList.add('on'); back.classList.add('on'); gen.classList.remove('dim'); back.classList.remove('dim'); ensureAudio(); startWatch(); panel.dataset.hi='1'; },sceneBrief:function(){ briefing(); },closePanel:closeP,isBusy:function(){ return busy; },costume:setCostume,build:build,go:go,state:function(){ return prog; },ohOpen:ohOpen,detectMods:detectMods,riskTick:riskTick,setMyPos:function(la,lo){ myP={lat:la,lon:lo,t:Date.now()}; },isAlarm:function(){ return alarm; },qMsg:function(d){ window.dispatchEvent(new MessageEvent('message',{data:d,origin:'https://quitari.kieda.online'})); },intentOf:intentOf,briefing:briefing};
 })();
 </script>
 <script>
@@ -5155,6 +5156,7 @@ if('serviceWorker' in navigator){
   function startListen(){
     if(!SRc){ if(wantListen&&!startListen.w){ startListen.w=1; document.body.classList.add('noVoice'); sayHint('⚠️ هذا المتصفح ما يسمعش الصوت — اكتب في الخانة أو اضغط 🎤'); } return; }
     if(micDenied||!wantListen||speaking||alarmNow()) return;
+    if(window.__fh&&window.__fh.isBusy&&window.__fh.isBusy()){ setTimeout(startListen,1500); return; }
     stopListen(); var my=++lsn; try{ recog=new SRc(); }catch(e){ return; }
     recog.lang=sttLang; recog.interimResults=false; recog.continuous=false;
     try{ if(window.__fh&&window.__fh.hint) window.__fh.hint('🎤 فرحوم يسمعك… احكيلو'); }catch(e){}
