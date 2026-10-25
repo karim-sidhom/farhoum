@@ -3824,7 +3824,7 @@ if('serviceWorker' in navigator){
     if(advFlight[key]){ out.innerHTML='<div class="prgR">⏳ فرحوم يحمّل المطاعم والقوائم…</div>'; return advFlight[key]; }
     var P=(async function(){
       out.innerHTML='<div class="prgR">⏳ فرحوم يحمّل المطاعم والقوائم…</div>';
-      var dbp=advDb(city.slug), osmp=advOsm(radius), rows=await dbp, osm=await osmp, zone=[], n=0;
+      var dbp=advDb(city.slug), osmp=advOsm(radius), rows=await dbp, osm=(rows&&rows.every(function(r){ return r.lat!=null; }))?[]:await osmp, zone=[], n=0; osmp.catch(function(){});
       if(rows){
         var upd='';
         rows.forEach(function(r){
@@ -4410,6 +4410,8 @@ if('serviceWorker' in navigator){
   async function osmNear(mod,lat,lon){
     var f=osmFilter(mod); if(!f) return [];
     var radii=[1200,3500], out=[];
+    /* Qitari en arrière-plan : lieux déjà repérés autour de toi (mémoire de la carte) → réponse immédiate, sans attendre Overpass */
+    try{ var ce=alaCLoad()[alaCKey({lat:lat,lon:lon})]; if(ce&&ce.res) ce.res.forEach(function(r){ if(r.ar===mod.cat&&r.lat!=null) out.push({nom:r.name||(mod.ar+' (بلا اسم)'),lat:r.lat,lon:r.lon,hours:null,phone:null,osm:true,dishes:[],picked:{}}); }); }catch(e){}
     for(var i=0;i<radii.length&&!out.length;i++){
       var els=[]; try{ els=await alaFetch('[out:json][timeout:25];nwr'+f+'(around:'+radii[i]+','+lat+','+lon+');out center tags 60;'); }catch(e){ els=[]; }
       els.forEach(function(e){
@@ -4442,7 +4444,7 @@ if('serviceWorker' in navigator){
     return res.slice(0,4);
   }
   async function candidatesFor(mod,a,keys,bud,opts){
-    var osm=await osmNear(mod,a[0],a[1]), cands=[];
+    var osm=mod.food?[]:await osmNear(mod,a[0],a[1]), cands=[];
     if(mod.food){
       var zone=[]; try{ G.setC(a[0],a[1]); zone=await G.gather(G.getId(),document.createElement('div'),1500)||[]; }catch(e){ zone=[]; }
       cands=foodCands(mod,zone,(opts&&opts.keys)||(mod.food==='cafe'?CAFE_KEYS:keys),bud,a);
