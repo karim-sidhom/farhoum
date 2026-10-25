@@ -203,6 +203,10 @@ body.noVoice #fhRow{display:flex!important}
 #fhPanel .fhSub{display:none!important}
 #scBack{display:none;position:fixed;bottom:calc(26px + env(safe-area-inset-bottom));right:90px;z-index:1105;width:42px;height:42px;border-radius:50%;border:2px solid #d4af37;background:#0d1a6eE6;color:#ffe566;font-size:20px;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.45);padding:0}
 body.mapOpen #scBack{display:block}
+/* Farhoum seul : aucune barre en bas (panneau, badge de statut) */
+body:not(.noVoice) #fhPanel{display:none!important}
+svg.cosHat path[fill="#5fc7e8"],svg.cosHat circle[cx="238"][cy="6"],svg.cosHat path[stroke="#2f86c8"]{display:none}
+#alabadge{display:none!important}
 
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Reem+Kufi:wght@500;700&family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
@@ -4264,6 +4268,114 @@ if('serviceWorker' in navigator){
     });
   }
   function bubble(t){ var b=$('fhSay'); if(b) b.textContent=t; }
+  /* ===== Farhoum change de tenue selon le sujet (tablier, jibba, blouse, casquette…) ===== */
+  var COS_GOLD='#f5c542';
+  function cosHand(x,y){ return '<circle cx="'+x+'" cy="'+y+'" r="13" fill="#49abef" stroke="#234fa8" stroke-width="2"/>'; }
+  function cosRobe(fill,edge,long){
+    var s=(long?'<path d="M78 346 L66 414 C120 432 220 432 274 414 L262 346 Z" fill="'+fill+'" stroke="'+edge+'" stroke-width="2"/>':'')
+     +'<path d="M82 362 C62 300 80 250 104 232 C122 218 142 214 170 214 C198 214 218 218 236 232 C260 250 278 300 258 362 Z" fill="'+fill+'" stroke="'+edge+'" stroke-width="2"/>'
+     +'<path d="M104 234 L206 322" stroke="'+fill+'" stroke-width="46" stroke-linecap="round" fill="none"/>'
+     +'<path d="M236 234 L134 322" stroke="'+fill+'" stroke-width="46" stroke-linecap="round" fill="none"/>'
+     +'<path d="M108 244 L210 332" stroke="rgba(0,0,0,.10)" stroke-width="12" stroke-linecap="round" fill="none"/>'
+     +'<path d="M232 244 L130 332" stroke="rgba(0,0,0,.10)" stroke-width="12" stroke-linecap="round" fill="none"/>'
+     +'<rect x="186" y="308" width="38" height="22" rx="8" fill="'+COS_GOLD+'" transform="rotate(40 205 319)"/>'
+     +'<rect x="116" y="308" width="38" height="22" rx="8" fill="'+COS_GOLD+'" transform="rotate(-40 135 319)"/>';
+    return s;
+  }
+  function cosApron(){
+    return '<path d="M130 242 L152 206" stroke="#e9e9e9" stroke-width="7" stroke-linecap="round"/><path d="M210 242 L188 206" stroke="#e9e9e9" stroke-width="7" stroke-linecap="round"/>'
+     +'<path d="M126 240 L214 240 L234 368 C208 388 132 388 106 368 Z" fill="#fbfbfb" stroke="#cfcfcf" stroke-width="2.5"/>'
+     +'<path d="M112 352 C140 366 200 366 228 352" fill="none" stroke="#c0392b" stroke-width="6"/>'
+     +'<path d="M130 256 L210 256" stroke="#e5e5e5" stroke-width="3"/>';
+  }
+  function cosToque(){
+    return '<path d="M102 110 C84 78 100 44 134 52 C140 26 200 26 206 52 C240 44 256 78 238 110 Z" fill="#fff" stroke="#d9d9d9" stroke-width="2.5"/>'
+     +'<rect x="104" y="96" width="132" height="16" rx="6" fill="#f1f1f1" stroke="#d9d9d9" stroke-width="2"/>'
+     +'<path d="M140 94 C136 70 138 60 142 54 M170 94 L170 50 M200 94 C204 70 202 60 198 54" fill="none" stroke="#e3e3e3" stroke-width="2.5"/>';
+  }
+  function cosChechia(){
+    return '<path d="M104 108 C98 30 242 30 236 108 Z" fill="#c1121f" stroke="#7d0b14" stroke-width="2.5"/>'
+     +'<ellipse cx="150" cy="70" rx="20" ry="9" fill="rgba(255,255,255,.22)" transform="rotate(-20 150 70)"/>'
+     +'<rect x="102" y="98" width="136" height="12" rx="5" fill="#9b0e19"/>'
+     +'<path d="M226 60 C256 70 258 104 248 132" fill="none" stroke="#16203f" stroke-width="5" stroke-linecap="round"/><circle cx="248" cy="136" r="7" fill="#16203f"/>';
+  }
+  function cosCap(){
+    return '<path d="M104 106 C104 34 236 34 236 106 Z" fill="#14285a" stroke="#0b1840" stroke-width="2.5"/>'
+     +'<path d="M98 104 L242 104 L238 116 C202 126 138 126 102 116 Z" fill="#0b1840"/>'
+     +'<rect x="104" y="92" width="132" height="10" fill="'+COS_GOLD+'"/><circle cx="170" cy="80" r="10" fill="'+COS_GOLD+'" stroke="#a86a18" stroke-width="2"/>';
+  }
+  function cosItem(t){
+    t=String(t||'');
+    if(/pizza|بيتزا/i.test(t)) return '<circle cx="170" cy="326" r="42" fill="#e8a63c" stroke="#a8691c" stroke-width="3"/><circle cx="170" cy="326" r="34" fill="#d9402a"/><circle cx="170" cy="326" r="30" fill="#f6c945"/>'
+      +'<circle cx="154" cy="312" r="6" fill="#b3201f"/><circle cx="186" cy="310" r="6" fill="#b3201f"/><circle cx="170" cy="338" r="6.5" fill="#b3201f"/><circle cx="148" cy="336" r="5" fill="#b3201f"/><circle cx="194" cy="332" r="5" fill="#b3201f"/>'
+      +'<path d="M170 296 L170 356 M144 311 L196 341 M196 311 L144 341" stroke="rgba(160,100,20,.35)" stroke-width="2"/>'+cosHand(128,340)+cosHand(212,340);
+    if(/baguette|pain\b|خبز|باغيت|croissant|كروسون/i.test(t)) return '<g transform="rotate(-18 170 322)"><rect x="80" y="304" width="180" height="34" rx="17" fill="#d99a45" stroke="#9a6320" stroke-width="2.5"/>'
+      +'<path d="M112 310 l14 20 M138 308 l14 22 M164 308 l14 22 M190 308 l14 22 M216 310 l14 20" stroke="#f3cf8c" stroke-width="4" stroke-linecap="round"/>'+cosHand(122,324)+cosHand(220,324)+'</g>';
+    if(/sandwich|ساندويتش|سندويتش|سندويش|tacos|kebab|chawarma|shawarma|شاورما|burger|panini|kosksi/i.test(t)) return '<path d="M114 340 C114 366 226 366 226 340 Z" fill="#d9a05b" stroke="#9a6320" stroke-width="2"/>'
+      +'<rect x="116" y="328" width="108" height="14" rx="6" fill="#e9c9a0"/>'
+      +'<path d="M110 326 q10 -12 20 0 t20 0 t20 0 t20 0 t20 0 t20 0 L230 334 L110 334 Z" fill="#6cc04a"/>'
+      +'<ellipse cx="140" cy="332" rx="16" ry="5" fill="#e04b3a"/><ellipse cx="200" cy="332" rx="16" ry="5" fill="#e04b3a"/>'
+      +'<path d="M110 324 C110 276 230 276 230 324 Z" fill="#e0a85c" stroke="#9a6320" stroke-width="2"/>'
+      +'<ellipse cx="150" cy="298" rx="5" ry="2.5" fill="#fff2c9"/><ellipse cx="172" cy="290" rx="5" ry="2.5" fill="#fff2c9"/><ellipse cx="194" cy="300" rx="5" ry="2.5" fill="#fff2c9"/>'+cosHand(108,338)+cosHand(232,338);
+    if(/caf[eé]|coffee|قهو|th[eé]\b|jus\b|cappuccino|espresso|expresso/i.test(t)) return cosCup();
+    return '<ellipse cx="170" cy="354" rx="64" ry="9" fill="#aab4be"/><path d="M118 352 C118 296 222 296 222 352 Z" fill="#cfd6dd" stroke="#8d98a3" stroke-width="2.5"/><circle cx="170" cy="297" r="6" fill="#8d98a3"/>'
+      +'<path d="M134 330 C138 312 150 306 160 304" fill="none" stroke="rgba(255,255,255,.7)" stroke-width="4" stroke-linecap="round"/>'+cosHand(112,348)+cosHand(228,348);
+  }
+  function cosCup(){
+    return '<path d="M200 322 C228 320 228 346 200 346" fill="none" stroke="#c9c9c9" stroke-width="8"/><ellipse cx="170" cy="356" rx="46" ry="9" fill="#f1f1f1" stroke="#cfcfcf" stroke-width="2"/>'
+     +'<path d="M138 312 L202 312 C202 350 188 356 170 356 C152 356 138 350 138 312 Z" fill="#fff" stroke="#c9c9c9" stroke-width="2.5"/><ellipse cx="170" cy="312" rx="32" ry="7" fill="#5a3319"/>'
+     +'<path d="M156 300 C148 288 164 282 156 270 M172 300 C164 288 180 282 172 270 M188 300 C180 288 196 282 188 270" fill="none" stroke="rgba(255,255,255,.75)" stroke-width="4" stroke-linecap="round"/>'+cosHand(136,340)+cosHand(204,340);
+  }
+  function cosHealth(withBox){
+    return cosRobe('#ffffff','#c8d3de',true)
+     +'<path d="M146 216 L170 268 L194 216 Z" fill="#49abef"/><path d="M146 216 L170 268 L194 216" fill="none" stroke="#c8d3de" stroke-width="3"/>'
+     +'<path d="M148 214 C136 264 170 300 170 300 M192 214 C204 264 170 300 170 300" fill="none" stroke="#2b2b2b" stroke-width="4"/><circle cx="170" cy="304" r="7" fill="#cfd6dd" stroke="#2b2b2b" stroke-width="2"/>'
+     +'<circle cx="242" cy="318" r="12" fill="#fff" stroke="#2e9e5b" stroke-width="2.5"/><path d="M242 311 v14 M235 318 h14" stroke="#2e9e5b" stroke-width="4.5"/>'
+     +(withBox?'<rect x="140" y="300" width="60" height="44" rx="6" fill="#fff" stroke="#2e9e5b" stroke-width="3"/><path d="M170 310 v24 M158 322 h24" stroke="#2e9e5b" stroke-width="8"/>':'')
+     +cosHand(128,334)+cosHand(212,334);
+  }
+  function cosMosque(){
+    return cosRobe('#fbfbf6','#cfcab4',true)
+     +'<path d="M148 216 L170 264 L192 216 Z" fill="#2f72d8"/><path d="M148 216 L170 264 L192 216" fill="none" stroke="'+COS_GOLD+'" stroke-width="5"/>'
+     +'<circle cx="170" cy="332" r="3.5" fill="'+COS_GOLD+'"/><circle cx="170" cy="346" r="3.5" fill="'+COS_GOLD+'"/><circle cx="170" cy="360" r="3.5" fill="'+COS_GOLD+'"/>'
+     +'<path d="M128 336 C132 388 208 388 212 336" fill="none" stroke="#6b3a1e" stroke-width="7" stroke-linecap="round" stroke-dasharray="0 10"/>'
+     +cosHand(128,334)+cosHand(212,334)+cosChechia();
+  }
+  function cosTrain(){
+    return cosRobe('#14285a','#0b1840',false)
+     +'<path d="M148 216 L170 262 L192 216 Z" fill="#fff"/><circle cx="150" cy="300" r="4" fill="'+COS_GOLD+'"/><circle cx="190" cy="300" r="4" fill="'+COS_GOLD+'"/>'
+     +'<path d="M214 332 L238 232" stroke="#6b4423" stroke-width="6" stroke-linecap="round"/><path d="M238 236 L296 250 L240 272 Z" fill="#d62828" stroke="#8f1717" stroke-width="2"/>'
+     +cosHand(128,334)+cosHand(214,332)+cosCap();
+  }
+  function costumeSvg(kind,text){
+    if(kind==='food') return cosApron()+cosItem(text)+cosToque();
+    if(kind==='mosque') return cosMosque();
+    if(kind==='health') return cosHealth(false);
+    if(kind==='pharm') return cosHealth(true);
+    if(kind==='train') return cosTrain();
+    return '';
+  }
+  function costumeOf(ids){
+    var m={resto:'food',cafe:'food',mosque:'mosque',pharm:'pharm',hosp:'health',dent:'health',vet:'health',optic:'health'}, i;
+    for(i=0;i<(ids||[]).length;i++) if(m[ids[i]]) return m[ids[i]];
+    return null;
+  }
+  function setCostume(kind,text){
+    var svgs=document.querySelectorAll('#genie svg,#fhGenie svg'), hat=(kind==='food'||kind==='mosque'||kind==='train');
+    Array.prototype.forEach.call(svgs,function(sv){
+      var g=sv.querySelector('.fhCos');
+      if(!g){ g=document.createElementNS('http://www.w3.org/2000/svg','g'); g.setAttribute('class','fhCos'); sv.appendChild(g); }
+      g.innerHTML=kind?costumeSvg(kind,text):'';
+      sv.classList.toggle('cosHat',hat);
+    });
+  }
+  function ackSearch(t){
+    var d=String(t||'').trim(), pre=/^(?:فرحوم|فرهوم|farhoum|je\s+(?:veux|voudrais|cherche)|cherche(?:-moi)?|trouve(?:-moi)?|donne(?:-moi)?|أريد|اريد|نحب|نحبّ|عطيني|جيبلي|لوّج|لوج)\s+/i, art=/^(?:le|la|les|l'|el|al|un|une|des)\s+/i, g=0;
+    while(g++<4 && pre.test(d)) d=d.replace(pre,'');
+    d=d.replace(art,'').replace(/[\s.!?؟،,]+$/,'');
+    if(!d) return;
+    if(/[؀-ۿ]/.test(d)) speak([['نلوّج لك على '+d,'ar-SA']]); else speak([['Je te cherche el '+d,'fr-FR']]);
+  }
   function spokenTime(m){ m=((m%1440)+1440)%1440; var h=Math.floor(m/60), mi=m%60; return h+(mi?' و '+mi:''); }
   /* ====== أدوات ====== */
   function nowMin(){ var d=new Date(); return d.getHours()*60+d.getMinutes(); }
@@ -4410,7 +4522,7 @@ if('serviceWorker' in navigator){
     var sel=opts.ids?[]:chosen(), det=detectMods(text), ids=opts.ids||det.concat(sel.filter(function(x){ return det.indexOf(x)<0; }));
     var pts=text?P.parse(text.replace(/[،؛؟]/g,' ')):[];
     if(!ids.length&&pts.length<2){ out.innerHTML='<div class="prgE">اكتب برنامجك أو اختر نمطاً (💊 ☕ 🍽️ …) ثم اضغط «اصنع البرنامج».</div>'; bubble('شنيّة برنامجك؟ قلّي وين تمشي وشنوّة تحب (صيدلية، قهوة، مطعم…)'); speak([['شنيّة برنامجك؟ قلّي وين تمشي وشنوّة تحب','ar-SA']]); return; }
-    gen.classList.remove('dim'); back.classList.remove('dim'); if(!opts.ids) setChips(ids); busy=true; $('fhGo').disabled=true;
+    try{ setCostume(costumeOf(ids),text); }catch(e){} gen.classList.remove('dim'); back.classList.remove('dim'); if(!opts.ids) setChips(ids); busy=true; $('fhGo').disabled=true;
     out.innerHTML='<div class="prgR">⏳ فرحوم يحضّر البرنامج…</div>'; bubble('نحضّر لك البرنامج… دقيقة');
     try{
       var bud=budget(), dayOff=opts.dayOff!=null?opts.dayOff:(/غدوة|غدا|غدًا|demain/i.test(text)?1:0), legs=[], routeRows=[], anchor=null, cur=null;
@@ -4588,6 +4700,7 @@ if('serviceWorker' in navigator){
   ];
   function intentOf(t){ for(var i=0;i<INTENTS.length;i++) if(INTENTS[i].re.test(t)) return INTENTS[i].id; return null; }
   async function go(){
+    try{ setCostume(null); }catch(e){}
     var text=$('fhTxt').value.trim(), sel=chosen(), pts=text?P.parse(text.replace(/[،؛؟]/g,' ')):[], mods=detectMods(text);
     if(text&&pts.length<2&&!sel.length&&mods.length<=1){
       var it=intentOf(text);
@@ -4595,7 +4708,7 @@ if('serviceWorker' in navigator){
         if(it==='rap') return playMusic('sudo');
         if(it==='music') return playMusic();
         if(it==='promo'){ var pk=G.keys(text.replace(/promotions?|promo|عروض|عرض|تخفيضات|تخفيض|offres?|r[ée]ductions?|soldes?/gi,' ')); return build({ids:mods.length?mods:['resto'],kind:'promo',keys:pk,intro:'هذه العروض والأسعار حواليك'}); }
-        if(it==='risk'){ toMap(); return answerSimple(riskStatus()); }
+        if(it==='risk'){ setCostume('train'); toMap(); return answerSimple(riskStatus()); }
         if(it==='prayer'){ toMap(); return prayerAnswer(); }
         if(it==='breakfast'){ toMap(); return breakfast(); }
         if(it==='brief'){ toMap(); return briefing(); }
@@ -4783,7 +4896,7 @@ if('serviceWorker' in navigator){
   function unlockA(){ ensureAudio(); document.removeEventListener('click',unlockA,true); document.removeEventListener('touchstart',unlockA,true); }
   document.addEventListener('click',unlockA,true); document.addEventListener('touchstart',unlockA,true); startWatch();
   function openP(){ try{ if(window.__scene) window.__scene.listenOn(); }catch(e){} panel.style.display='block'; gen.classList.add('on'); back.classList.add('on'); gen.classList.remove('dim'); back.classList.remove('dim'); var a=$('prgPanel'), b=$('glvPanel'); if(a) a.style.display='none'; if(b) b.style.display='none'; ensureAudio(); startWatch(); if(!panel.dataset.hi){ panel.dataset.hi='1'; speak([['شبيك لبيك','ar-SA']]); briefing(); } }
-  function closeP(){ try{ if(window.__scene) window.__scene.listenOff(); }catch(e){} panel.style.display='none'; gen.classList.remove('on'); back.classList.remove('on'); try{ G.stopRead(); }catch(e){} talk(false); }
+  function closeP(){ try{ setCostume(null); }catch(e){} try{ if(window.__scene) window.__scene.listenOff(); }catch(e){} panel.style.display='none'; gen.classList.remove('on'); back.classList.remove('on'); try{ G.stopRead(); }catch(e){} talk(false); }
   btn.onclick=function(){ if(panel.style.display==='block') closeP(); else openP(); };
   $('fhX').onclick=closeP;
   $('fhGo').onclick=go; $('fhBrief').onclick=function(){ ensureAudio(); startWatch(); briefing(); };
@@ -4810,7 +4923,7 @@ if('serviceWorker' in navigator){
     var t=e.target; if(!prog||!t.classList||!t.classList.contains('fhDish')) return;
     var s=prog.steps[+t.dataset.s], c=s.cands[s.sel]; c.picked[+t.dataset.d]=t.checked; render(false);
   });
-  window.__fh={ask:function(t){ if(musicOn){ if(/وقف|أوقف|اوقف|اطفئ|أطفئ|سكر|سكّر|stop|arr[êe]te|ferme/i.test(t)){ stopMusic(); return; } if(!/فرحوم|فرهوم|farhoum/i.test(t)) return; } bubble('🎤 '+t); if(mapAnswer(t)) return; awaitMap=false; setChips([]); $('fhTxt').value=t; window.__askNext=true; var r=go(); Promise.resolve(r).then(function(){ window.__askNext=false; },function(){ window.__askNext=false; }); return r; },hint:bubble,panelHidden:function(){ return panel.style.display!=='block'; },sceneOpen:function(){ panel.style.display='block'; gen.classList.add('on'); back.classList.add('on'); gen.classList.remove('dim'); back.classList.remove('dim'); ensureAudio(); startWatch(); panel.dataset.hi='1'; },sceneBrief:function(){ briefing(); },closePanel:closeP,build:build,go:go,state:function(){ return prog; },ohOpen:ohOpen,detectMods:detectMods,riskTick:riskTick,setMyPos:function(la,lo){ myP={lat:la,lon:lo,t:Date.now()}; },isAlarm:function(){ return alarm; },qMsg:function(d){ window.dispatchEvent(new MessageEvent('message',{data:d,origin:'https://quitari.kieda.online'})); },intentOf:intentOf,briefing:briefing};
+  window.__fh={ask:function(t){ if(musicOn){ if(/وقف|أوقف|اوقف|اطفئ|أطفئ|سكر|سكّر|stop|arr[êe]te|ferme/i.test(t)){ stopMusic(); return; } if(!/فرحوم|فرهوم|farhoum/i.test(t)) return; } bubble('🎤 '+t); if(mapAnswer(t)) return; awaitMap=false; try{ if(!intentOf(t)) ackSearch(t); }catch(e){} setChips([]); $('fhTxt').value=t; window.__askNext=true; var r=go(); Promise.resolve(r).then(function(){ window.__askNext=false; },function(){ window.__askNext=false; }); return r; },hint:bubble,panelHidden:function(){ return panel.style.display!=='block'; },sceneOpen:function(){ panel.style.display='block'; gen.classList.add('on'); back.classList.add('on'); gen.classList.remove('dim'); back.classList.remove('dim'); ensureAudio(); startWatch(); panel.dataset.hi='1'; },sceneBrief:function(){ briefing(); },closePanel:closeP,costume:setCostume,build:build,go:go,state:function(){ return prog; },ohOpen:ohOpen,detectMods:detectMods,riskTick:riskTick,setMyPos:function(la,lo){ myP={lat:la,lon:lo,t:Date.now()}; },isAlarm:function(){ return alarm; },qMsg:function(d){ window.dispatchEvent(new MessageEvent('message',{data:d,origin:'https://quitari.kieda.online'})); },intentOf:intentOf,briefing:briefing};
 })();
 </script>
 <script>
