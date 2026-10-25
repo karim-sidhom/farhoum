@@ -1343,7 +1343,7 @@ function alaCSave(ck,res,complete){
   try{ localStorage.setItem(ALA_CACHE_KEY,JSON.stringify(c)); }catch(e){}
 }
 /* APP-BRIDGE-CLIENT : صيدليتي / محطتي / صلاتي — فرحوم يسأل هذه التطبيقات مباشرة (iframe خفي ?bridge=1)؛ إذا ما ردّتش يبقى البحث القديم (Overpass) */
-var ALA_APP_ORIGIN={'صيدلية':'https://saydaliati.kieda.online','محطة وقود':'https://mahattati.kieda.online','جامع':'https://salati.kieda.online'};
+var ALA_APP_ORIGIN={'صيدلية':'https://saydaliati.kieda.online','محطة وقود':'https://mahattati.kieda.online','جامع':'https://salati.kieda.online','صرّاف':'https://dabi.kieda.online'};
 var alaAppFrames={}, alaAppReadyP={}, alaAppReadyFn={}, alaAppPending={}, alaAppReq=0;
 window.addEventListener('message',function(ev){
   var d=ev.data; if(!d||typeof d!=='object') return;
