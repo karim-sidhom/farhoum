@@ -194,6 +194,13 @@ body.mapOpen #alaScene{opacity:0;visibility:hidden;pointer-events:none;transitio
 body:not(.mapOpen) #fhGenie,body:not(.mapOpen) #fhBack{display:none!important}
 body:not(.mapOpen) #alabadge{display:none!important}
 #alaScene #genie:not(.show){pointer-events:none}
+/* ===== Farhoum unique : voix + liste seulement (rien n'est supprimé, seulement masqué) ===== */
+#fhBtn{display:none!important}
+#fhTxt,#fhMods,#fhRow{display:none!important}
+body.noVoice #fhTxt{display:block!important}
+body.noVoice #fhRow{display:flex!important}
+#fhPanel .fhDish{display:none!important}
+#fhPanel .fhSub{display:none!important}
 #scBack{display:none;position:fixed;bottom:calc(26px + env(safe-area-inset-bottom));right:90px;z-index:1105;width:42px;height:42px;border-radius:50%;border:2px solid #d4af37;background:#0d1a6eE6;color:#ffe566;font-size:20px;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.45);padding:0}
 body.mapOpen #scBack{display:block}
 
@@ -3912,7 +3919,7 @@ if('serviceWorker' in navigator){
 (function(){
   var G=window.__glv, P=window.__prg;
   if(!G||!P||!G.gather) return;
-  var fhLayer=L.layerGroup().addTo(map), prog=null, busy=false, GENIE_PANEL=`        <svg viewBox="0 0 340 480" xmlns="http://www.w3.org/2000/svg">
+  var fhLayer=L.layerGroup().addTo(map), prog=null, busy=false, buildSeq=0, GENIE_PANEL=`        <svg viewBox="0 0 340 480" xmlns="http://www.w3.org/2000/svg">
           <defs>
             <radialGradient id="fp_g_skin" cx="0.42" cy="0.32" r="0.92">
               <stop offset="0" stop-color="#8fe7f8"/><stop offset="40%" stop-color="#49abef"/>
@@ -4386,7 +4393,7 @@ if('serviceWorker' in navigator){
   function setChips(ids){ Array.prototype.forEach.call(document.querySelectorAll('#fhMods .fhM'),function(b){ b.classList.toggle('on',ids.indexOf(b.dataset.m)>=0); }); }
   async function build(opts){
     opts=(opts&&opts.ids)?opts:{};
-    if(busy) return; var out=$('fhOut'), text=opts.ids?'':$('fhTxt').value.trim();
+    var my=++buildSeq; busy=false; $('fhGo').disabled=false; var out=$('fhOut'), text=opts.ids?'':$('fhTxt').value.trim();
     var sel=opts.ids?[]:chosen(), det=detectMods(text), ids=opts.ids||det.concat(sel.filter(function(x){ return det.indexOf(x)<0; }));
     var pts=text?P.parse(text.replace(/[،؛؟]/g,' ')):[];
     if(!ids.length&&pts.length<2){ out.innerHTML='<div class="prgE">اكتب برنامجك أو اختر نمطاً (💊 ☕ 🍽️ …) ثم اضغط «اصنع البرنامج».</div>'; bubble('شنيّة برنامجك؟ قلّي وين تمشي وشنوّة تحب (صيدلية، قهوة، مطعم…)'); speak([['شنيّة برنامجك؟ قلّي وين تمشي وشنوّة تحب','ar-SA']]); return; }
@@ -4409,21 +4416,21 @@ if('serviceWorker' in navigator){
         cur=pts[0].time!=null?pts[0].time:nowMin(); var c1=stCoord(pts[0].label); if(c1) anchor={pt:c1,label:pts[0].label};
       }
       if(!anchor||!anchor.pt){
-        var me=await myPos(), tm=/(\d{1,2})\s*[:h]\s*(\d{2})?/i.exec(text);
+        var me=await myPos(); if(my!==buildSeq) return; var tm=/(\d{1,2})\s*[:h]\s*(\d{2})?/i.exec(text);
         anchor={pt:[me.lat,me.lon],label:me.label,me:true};
         if(cur==null) cur=opts.start!=null?opts.start:(tm?(+tm[1])*60+(+(tm[2]||0)):nowMin());
       }
       var keys=G.keys(text), steps=[];
       for(var k=0;k<ids.length;k++){
-        var mod=modOf(ids[k]); out.innerHTML='<div class="prgR">⏳ فرحوم يبحث عن '+esc(mod.ar)+' ('+(k+1)+'/'+ids.length+')…</div>';
-        var cands=await candidatesFor(mod,anchor.pt,keys,bud,opts);
+        if(my!==buildSeq) return; var mod=modOf(ids[k]); out.innerHTML='<div class="prgR">⏳ فرحوم يبحث عن '+esc(mod.ar)+' ('+(k+1)+'/'+ids.length+')…</div>';
+        var cands=await candidatesFor(mod,anchor.pt,keys,bud,opts); if(my!==buildSeq) return;
         steps.push({mod:mod,cands:cands,sel:0,all:false});
       }
       prog={legs:legs,routeRows:routeRows,anchor:anchor,start:cur,dayOff:dayOff,steps:steps,bud:bud,text:text,kind:opts.kind||'program',meal:opts.meal||null,intro:opts.intro||null};
-      if(opts.prayer) prog.pray=await prayerTimes(anchor.pt);
+      if(opts.prayer) prog.pray=await prayerTimes(anchor.pt); if(my!==buildSeq) return;
       autoSelect(); retime(); render(true);
-    }catch(e){ out.innerHTML='<div class="prgE">'+esc(e&&e.message||e)+'</div>'; bubble('وقعت مشكلة'); }
-    busy=false; $('fhGo').disabled=false;
+    }catch(e){ if(my!==buildSeq) return; out.innerHTML='<div class="prgE">'+esc(e&&e.message||e)+'</div>'; bubble('وقعت مشكلة'); }
+    if(my===buildSeq){ busy=false; $('fhGo').disabled=false; }
   }
   function dayIdx(extra){ var d=new Date(Date.now()+((prog?prog.dayOff:0)+(extra||0))*86400000); return (d.getDay()+6)%7; }
   /* اختيار أحسن مكان لكل نشاط: مفتوح (أو مجهول) ثم الأقرب */
@@ -4674,7 +4681,7 @@ if('serviceWorker' in navigator){
   panel.innerHTML='<div id="fhTop"><div id="fhSay">شُبيك لُبيك! أنا فرحوم — قلّي برنامجك وأنا نصنعه لك</div><button id="fhX" aria-label="إغلاق">✕</button></div>'
    +'<textarea id="fhTxt" placeholder="مثال: غدوة نخرج من تونس 8h لسوسة، صيدلية، قهوة، ونتغدى بيتزا بميزانية 25 DT&#10;ou : Tunis 8h Sousse, pharmacie, café, déjeuner pizza 25 DT"></textarea>'
    +'<div id="fhMods">'+MODS.map(function(m){ return '<button class="fhM" data-m="'+m.id+'">'+m.e+' '+m.ar+'</button>'; }).join('')+'</div>'
-   +'<div style="display:flex;align-items:center;gap:6px;margin-top:4px"><input id="fhBud" type="number" min="1" step="0.5" placeholder="الميزانية DT"><button id="fhGo">🧞 اصنع / اسأل</button><button id="fhMic">🎤</button><button id="fhBrief">📣 قدّم لي</button><button id="fhStop" style="background:transparent;color:#fff">⏹</button></div>'
+   +'<div id="fhRow" style="display:flex;align-items:center;gap:6px;margin-top:4px"><input id="fhBud" type="number" min="1" step="0.5" placeholder="الميزانية DT"><button id="fhGo">🧞 اصنع / اسأل</button><button id="fhMic">🎤</button><button id="fhBrief">📣 قدّم لي</button><button id="fhStop" style="background:transparent;color:#fff">⏹</button></div>'
    +'<div id="fhOut"></div>';
   var back=document.createElement('div'); back.id='fhBack'; document.body.appendChild(back);
   var gen=document.createElement('div'); gen.id='fhGenie'; gen.innerHTML=GENIE_PANEL; document.body.appendChild(gen);
@@ -4709,7 +4716,7 @@ if('serviceWorker' in navigator){
     var t=e.target; if(!prog||!t.classList||!t.classList.contains('fhDish')) return;
     var s=prog.steps[+t.dataset.s], c=s.cands[s.sel]; c.picked[+t.dataset.d]=t.checked; render(false);
   });
-  window.__fh={ask:function(t){ setChips([]); $('fhTxt').value=t; return go(); },hint:bubble,panelHidden:function(){ return panel.style.display!=='block'; },sceneOpen:function(){ panel.style.display='block'; gen.classList.add('on'); back.classList.add('on'); gen.classList.remove('dim'); back.classList.remove('dim'); ensureAudio(); startWatch(); panel.dataset.hi='1'; },sceneBrief:function(){ briefing(); },closePanel:closeP,build:build,go:go,state:function(){ return prog; },ohOpen:ohOpen,detectMods:detectMods,riskTick:riskTick,setMyPos:function(la,lo){ myP={lat:la,lon:lo,t:Date.now()}; },isAlarm:function(){ return alarm; },qMsg:function(d){ window.dispatchEvent(new MessageEvent('message',{data:d,origin:'https://quitari.kieda.online'})); },intentOf:intentOf,briefing:briefing};
+  window.__fh={ask:function(t){ bubble('🎤 '+t); setChips([]); $('fhTxt').value=t; return go(); },hint:bubble,panelHidden:function(){ return panel.style.display!=='block'; },sceneOpen:function(){ panel.style.display='block'; gen.classList.add('on'); back.classList.add('on'); gen.classList.remove('dim'); back.classList.remove('dim'); ensureAudio(); startWatch(); panel.dataset.hi='1'; },sceneBrief:function(){ briefing(); },closePanel:closeP,build:build,go:go,state:function(){ return prog; },ohOpen:ohOpen,detectMods:detectMods,riskTick:riskTick,setMyPos:function(la,lo){ myP={lat:la,lon:lo,t:Date.now()}; },isAlarm:function(){ return alarm; },qMsg:function(d){ window.dispatchEvent(new MessageEvent('message',{data:d,origin:'https://quitari.kieda.online'})); },intentOf:intentOf,briefing:briefing};
 })();
 </script>
 <script>
@@ -4905,6 +4912,31 @@ if('serviceWorker' in navigator){
       speechSynthesis.speak(u);
     }catch(e){ if(onend) onend(); }
   }
+
+  function sayHint(t){ try{ if(window.__fh&&window.__fh.hint) window.__fh.hint(t); }catch(e){} }
+  function speakText(text, onend, noCap, langOverride){
+    sayHint(text);
+    if(alarmNow() || !soundOn || !('speechSynthesis' in window)){ if(onend) setTimeout(onend,500); return; }
+    var done=false, started=false, tries=0;
+    function fin(){ if(done) return; done=true; genie.classList.remove('talking'); if(onend) onend(); }
+    function attempt(){
+      tries++; try{ speechSynthesis.cancel(); }catch(e){}
+      setTimeout(function(){
+        if(done) return;
+        try{
+          var u=new SpeechSynthesisUtterance(text), lg=langOverride||'ar-SA', v=(lg==='ar-SA')?arVoice():null; if(v) u.voice=v;
+          u.lang=lg; u.rate=0.92; u.pitch=0.6; u.volume=1;
+          u.onstart=function(){ started=true; genie.classList.add('talking'); };
+          u.onend=fin; u.onerror=function(){ if(!started&&tries<2) attempt(); else fin(); };
+          try{ speechSynthesis.resume(); }catch(e){}
+          speechSynthesis.speak(u);
+        }catch(e){ fin(); }
+      },160);
+      setTimeout(function(){ if(!started&&!done&&tries<2){ attempt(); } },2200);
+    }
+    attempt();
+    setTimeout(fin,14000);
+  }
   var asstShown=false;
   function showAssistant(){ asstShown=true; try{ if(window.__fh&&window.__fh.sceneOpen) window.__fh.sceneOpen(); }catch(e){} }
   function hideAssistant(){ asstShown=false; wantListen=false; stopListen(); try{ if(window.__fh&&window.__fh.closePanel) window.__fh.closePanel(); }catch(e){} }
@@ -4914,13 +4946,14 @@ if('serviceWorker' in navigator){
   function alarmNow(){ return !!(window.__fh&&window.__fh.isAlarm&&window.__fh.isAlarm()); }
   function stopListen(){ lsn++; try{ if(recog) recog.abort(); }catch(e){} }
   function startListen(){
-    if(!SRc||micDenied||!wantListen||speaking||alarmNow()) return;
+    if(!SRc){ if(wantListen&&!startListen.w){ startListen.w=1; document.body.classList.add('noVoice'); sayHint('⚠️ هذا المتصفح ما يسمعش الصوت — اكتب في الخانة أو اضغط 🎤'); } return; }
+    if(micDenied||!wantListen||speaking||alarmNow()) return;
     stopListen(); var my=++lsn; try{ recog=new SRc(); }catch(e){ return; }
     recog.lang=sttLang; recog.interimResults=false; recog.continuous=false;
     try{ if(window.__fh&&window.__fh.hint) window.__fh.hint('🎤 فرحوم يسمعك… احكيلو'); }catch(e){}
     recog.onresult=function(ev){ if(my!==lsn) return; var t='',i; for(i=0;i<ev.results.length;i++) t+=ev.results[i][0].transcript+' '; t=t.trim(); if(!t) return;
       var g=guessLang(t); if(g) sttLang=g; try{ window.__fh.ask(t); }catch(e){} };
-    recog.onerror=function(ev){ if(my!==lsn) return; var er=ev&&ev.error; if(er==='not-allowed'||er==='service-not-allowed'){ micDenied=true; return; } if(wantListen) setTimeout(function(){ if(my===lsn) startListen(); },800); };
+    recog.onerror=function(ev){ if(my!==lsn) return; var er=ev&&ev.error; if(er==='not-allowed'||er==='service-not-allowed'){ micDenied=true; document.body.classList.add('noVoice'); sayHint('🔇 فعّل إذن الميكروفون باش يسمعك فرحوم'); return; } if(er==='audio-capture'){ sayHint('🎤 الميكروفون مشغول أو غير متاح'); } if(wantListen) setTimeout(function(){ if(my===lsn) startListen(); },800); };
     recog.onend=function(){ if(my!==lsn) return; if(wantListen) setTimeout(function(){ if(my===lsn) startListen(); },500); };
     try{ recog.start(); }catch(e){}
   }
