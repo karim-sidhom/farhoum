@@ -1086,8 +1086,8 @@ async function loadUsers(){
     var all=await r.json(), seen={}, rows=[];
     try{ railSeed(all); }catch(e){}
     all.forEach(function(u){ var k=u.device_id||('r'+u.id); if(!seen[k]){seen[k]=1;rows.push(u);} });
-    usersMap={};
-    rows.slice(0,MAX_LIVE).forEach(function(u){ usersMap[u.device_id||('r'+u.id)]=u; });
+    /* la position reste la même tant qu'une nouvelle position n'est pas détectée : on fusionne, on ne vide plus */
+    rows.slice(0,MAX_LIVE).forEach(function(u){ var k=u.device_id||('r'+u.id), o=usersMap[k]; if(!o||new Date(u.created_at)>=new Date(o.created_at)) usersMap[k]=u; });
     lastUsers=rows.filter(function(u){return u.lat!=null&&u.lon!=null}).slice(0,MAX_LIVE);
     document.getElementById('cnt').textContent=Math.min(rows.length,MAX_LIVE);
     var pts=rows.filter(function(u){return u.lat!=null&&u.lon!=null}).map(function(u){return [u.lat,u.lon]});
@@ -1130,7 +1130,6 @@ function rebuildLastUsers(){
   var mins=+document.getElementById('win').value, lim=Date.now()-mins*60000, arr=[];
   Object.keys(usersMap).forEach(function(k){
     var u=usersMap[k];
-    if(new Date(u.created_at).getTime()<lim){ delete usersMap[k]; return; }
     if(u.lat!=null&&u.lon!=null) arr.push(u);
   });
   arr.sort(function(x,y){return new Date(y.created_at)-new Date(x.created_at)});
