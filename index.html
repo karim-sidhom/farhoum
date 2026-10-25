@@ -4183,14 +4183,19 @@ if('serviceWorker' in navigator){
   var MODS=[
     {id:'pharm',ar:'صيدلية',e:'💊',cat:'صيدلية',dur:15,kw:/صيدل|pharmac|دواء|médicament|medicament/i},
     {id:'cafe',ar:'مقهى',e:'☕',cat:'قهوة',dur:30,food:'cafe',kw:/قهو|مقهى|مقه|cafe|café|coffee|كافي/i},
-    {id:'resto',ar:'مطعم',e:'🍽️',cat:'مطعم',dur:60,food:'resto',kw:/مطعم|غداء|عشاء|نتغدى|نتعشى|ناكل|نكل|déjeuner|dejeuner|dîner|diner|restaurant|resto|manger|pizza|بيتزا|ساندويتش|sandwich|burger|برجر/i},
+    {id:'resto',ar:'مطعم',e:'🍽️',cat:'مطعم',dur:60,food:'resto',kw:/مطعم|غداء|عشاء|نتغدى|نتعشى|ناكل|نكل|déjeuner|dejeuner|dîner|diner|restaurant|resto|manger|pizza|بيتزا|ساندويتش|سندويتش|سندويش|ساندويش|ساندوتش|سندوتش|sandwich|burger|برجر|برغر|شاورما|chawarma|shawarma|tacos|تاكوس|kebab|كباب|ملاوي|كسكسي|couscous|لبلابي|lablabi|pasta|معكرونة|مكرونة|sushi|سوشي|poulet|دجاج|poisson|سمك|حوت|salade|سلطة|مشوي|grillade|نحب ناكل|جيعان|جوعان|faim/i},
     {id:'fuel',ar:'وقود',e:'⛽',cat:'محطة وقود',dur:10,kw:/بنزين|وقود|carburant|essence|station service/i},
     {id:'atm',ar:'صرّاف',e:'🏧',cat:'صرّاف',dur:5,kw:/صراف|صرّاف|atm|distributeur|دابي/i},
     {id:'bank',ar:'بنك',e:'💳',cat:'بنك',dur:20,kw:/بنك|banque|bank/i},
     {id:'mosque',ar:'جامع',e:'🕌',cat:'جامع',dur:15,kw:/جامع|مسجد|صلاة|mosqu|prière|priere/i},
     {id:'market',ar:'سوق',e:'🛒',cat:'سوق',dur:20,kw:/سوق|supermarch|courses|monoprix|carrefour/i},
     {id:'hosp',ar:'مستشفى',e:'🏥',cat:'مستشفى',dur:30,kw:/مستشفى|hopital|hôpital|clinique/i},
-    {id:'hotel',ar:'نزل',e:'🏨',cat:'نزل',dur:0,kw:/نزل|فندق|hotel|hôtel|مبيت/i}
+    {id:'hotel',ar:'نزل',e:'🏨',cat:'نزل',dur:0,kw:/نزل|فندق|hotel|hôtel|مبيت/i},
+    {id:'dent',ar:'طبيب أسنان',e:'🦷',cat:'طبيب أسنان',dur:30,kw:/أسنان|اسنان|سنان|dentiste|dentist/i},
+    {id:'vet',ar:'بيطري',e:'🐾',cat:'بيطري',dur:30,kw:/بيطري|vétérinaire|veterinaire|vétér/i},
+    {id:'optic',ar:'نظارات',e:'👁️',cat:'نظارات',dur:20,kw:/نظار|optic|opticien/i},
+    {id:'hair',ar:'حلاق',e:'💈',cat:'حلاق',dur:30,kw:/حلاق|coiffeur|barbier/i},
+    {id:'butch',ar:'جزّار',e:'🥩',cat:'جزّار',dur:15,kw:/جزار|جزّار|boucher|boucherie/i}
   ];
   function modOf(id){ for(var i=0;i<MODS.length;i++) if(MODS[i].id===id) return MODS[i]; return null; }
   var CAFE_KEYS=['cafe','café','coffee','capuccino','cappuccino','espresso','expresso','jus','boisson','smoothie','mojito','thé','the ','limonade','citronnade','crepe','crêpe','gaufre','glace','gateau','cheesecake','brownie','tiramisu','croissant','قهوة','عصير'].map(G.norm);
@@ -4676,8 +4681,8 @@ if('serviceWorker' in navigator){
   document.body.appendChild(panel);
   function unlockA(){ ensureAudio(); document.removeEventListener('click',unlockA,true); document.removeEventListener('touchstart',unlockA,true); }
   document.addEventListener('click',unlockA,true); document.addEventListener('touchstart',unlockA,true); startWatch();
-  function openP(){ panel.style.display='block'; gen.classList.add('on'); back.classList.add('on'); gen.classList.remove('dim'); back.classList.remove('dim'); var a=$('prgPanel'), b=$('glvPanel'); if(a) a.style.display='none'; if(b) b.style.display='none'; ensureAudio(); startWatch(); if(!panel.dataset.hi){ panel.dataset.hi='1'; speak([['شبيك لبيك','ar-SA']]); briefing(); } }
-  function closeP(){ panel.style.display='none'; gen.classList.remove('on'); back.classList.remove('on'); try{ G.stopRead(); }catch(e){} talk(false); }
+  function openP(){ try{ if(window.__scene) window.__scene.listenOn(); }catch(e){} panel.style.display='block'; gen.classList.add('on'); back.classList.add('on'); gen.classList.remove('dim'); back.classList.remove('dim'); var a=$('prgPanel'), b=$('glvPanel'); if(a) a.style.display='none'; if(b) b.style.display='none'; ensureAudio(); startWatch(); if(!panel.dataset.hi){ panel.dataset.hi='1'; speak([['شبيك لبيك','ar-SA']]); briefing(); } }
+  function closeP(){ try{ if(window.__scene) window.__scene.listenOff(); }catch(e){} panel.style.display='none'; gen.classList.remove('on'); back.classList.remove('on'); try{ G.stopRead(); }catch(e){} talk(false); }
   btn.onclick=function(){ if(panel.style.display==='block') closeP(); else openP(); };
   $('fhX').onclick=closeP;
   $('fhGo').onclick=go; $('fhBrief').onclick=function(){ ensureAudio(); startWatch(); briefing(); };
@@ -4704,7 +4709,7 @@ if('serviceWorker' in navigator){
     var t=e.target; if(!prog||!t.classList||!t.classList.contains('fhDish')) return;
     var s=prog.steps[+t.dataset.s], c=s.cands[s.sel]; c.picked[+t.dataset.d]=t.checked; render(false);
   });
-  window.__fh={sceneOpen:function(){ panel.style.display='block'; gen.classList.add('on'); back.classList.add('on'); gen.classList.remove('dim'); back.classList.remove('dim'); ensureAudio(); startWatch(); panel.dataset.hi='1'; },sceneBrief:function(){ briefing(); },closePanel:closeP,build:build,go:go,state:function(){ return prog; },ohOpen:ohOpen,detectMods:detectMods,riskTick:riskTick,setMyPos:function(la,lo){ myP={lat:la,lon:lo,t:Date.now()}; },isAlarm:function(){ return alarm; },qMsg:function(d){ window.dispatchEvent(new MessageEvent('message',{data:d,origin:'https://quitari.kieda.online'})); },intentOf:intentOf,briefing:briefing};
+  window.__fh={ask:function(t){ setChips([]); $('fhTxt').value=t; return go(); },hint:bubble,panelHidden:function(){ return panel.style.display!=='block'; },sceneOpen:function(){ panel.style.display='block'; gen.classList.add('on'); back.classList.add('on'); gen.classList.remove('dim'); back.classList.remove('dim'); ensureAudio(); startWatch(); panel.dataset.hi='1'; },sceneBrief:function(){ briefing(); },closePanel:closeP,build:build,go:go,state:function(){ return prog; },ohOpen:ohOpen,detectMods:detectMods,riskTick:riskTick,setMyPos:function(la,lo){ myP={lat:la,lon:lo,t:Date.now()}; },isAlarm:function(){ return alarm; },qMsg:function(d){ window.dispatchEvent(new MessageEvent('message',{data:d,origin:'https://quitari.kieda.online'})); },intentOf:intentOf,briefing:briefing};
 })();
 </script>
 <script>
@@ -4841,7 +4846,7 @@ if('serviceWorker' in navigator){
     setTimeout(function(){ genie.classList.add('show'); }, 900);  // then condenses into the genie
     setTimeout(function(){
       heroSequence(function(){
-        speakText('شُبيك لُبيك، الدُّنيا بين يديك', function(){ showAssistant(); setTimeout(function(){ speakText('مرحبا بكم في عالمي الجميل، أنا فرحوم، بتسهيل حياتكم', resumeListen, true); }, 250); }, true);
+        var stage2=function(){ if(stage2.d) return; stage2.d=true; showAssistant(); var fin=function(){ if(fin.d) return; fin.d=true; resumeListen(); }; setTimeout(fin,9000); setTimeout(function(){ speakText('مرحبا بكم في عالمي الجميل، أنا فرحوم، بتسهيل حياتكم', fin, true); },250); }; setTimeout(stage2,7000); speakText('شُبيك لُبيك، الدُّنيا بين يديك', stage2, true);
       });
     }, 1280);
     clearInterval(idleTimer);
@@ -4902,9 +4907,24 @@ if('serviceWorker' in navigator){
   }
   var asstShown=false;
   function showAssistant(){ asstShown=true; try{ if(window.__fh&&window.__fh.sceneOpen) window.__fh.sceneOpen(); }catch(e){} }
-  function hideAssistant(){ asstShown=false; try{ if(window.__fh&&window.__fh.closePanel) window.__fh.closePanel(); }catch(e){} }
+  function hideAssistant(){ asstShown=false; wantListen=false; stopListen(); try{ if(window.__fh&&window.__fh.closePanel) window.__fh.closePanel(); }catch(e){} }
   function setCap(t){}
-  function resumeListen(){ try{ if(window.__fh&&window.__fh.sceneBrief) window.__fh.sceneBrief(); }catch(e){} }
+  var SRc=window.SpeechRecognition||window.webkitSpeechRecognition, recog=null, lsn=0, micDenied=false, sttLang='ar-SA', wantListen=false, speaking=false;
+  function guessLang(t){ if(/[؀-ۿ]/.test(t)) return 'ar-SA'; var fr=/[àâçéèêëîïôùûüÿœ]|(?:^|\s)(le|la|les|un|une|des|je|tu|il|est|et|bonjour|salut|merci|veux|quelle|où)(?:\s|$)/i.test(t), en=/(?:^|\s)(the|is|are|you|please|hello|where|what)(?:\s|$)/i.test(t); if(fr&&!en) return 'fr-FR'; if(en&&!fr) return 'en-US'; return null; }
+  function alarmNow(){ return !!(window.__fh&&window.__fh.isAlarm&&window.__fh.isAlarm()); }
+  function stopListen(){ lsn++; try{ if(recog) recog.abort(); }catch(e){} }
+  function startListen(){
+    if(!SRc||micDenied||!wantListen||speaking||alarmNow()) return;
+    stopListen(); var my=++lsn; try{ recog=new SRc(); }catch(e){ return; }
+    recog.lang=sttLang; recog.interimResults=false; recog.continuous=false;
+    try{ if(window.__fh&&window.__fh.hint) window.__fh.hint('🎤 فرحوم يسمعك… احكيلو'); }catch(e){}
+    recog.onresult=function(ev){ if(my!==lsn) return; var t='',i; for(i=0;i<ev.results.length;i++) t+=ev.results[i][0].transcript+' '; t=t.trim(); if(!t) return;
+      var g=guessLang(t); if(g) sttLang=g; try{ window.__fh.ask(t); }catch(e){} };
+    recog.onerror=function(ev){ if(my!==lsn) return; var er=ev&&ev.error; if(er==='not-allowed'||er==='service-not-allowed'){ micDenied=true; return; } if(wantListen) setTimeout(function(){ if(my===lsn) startListen(); },800); };
+    recog.onend=function(){ if(my!==lsn) return; if(wantListen) setTimeout(function(){ if(my===lsn) startListen(); },500); };
+    try{ recog.start(); }catch(e){}
+  }
+  function resumeListen(){ try{ if(window.__fh&&window.__fh.sceneBrief) window.__fh.sceneBrief(); }catch(e){} wantListen=true; setTimeout(startListen,800); }
   /* ===== API scène <-> Farhoum ===== */
   var opener=null, homeT=null;
   window.__scene={
@@ -4920,9 +4940,12 @@ if('serviceWorker' in navigator){
       clearTimeout(homeT);
       if(opener==='alarm'){ homeT=setTimeout(function(){ if(!(window.__fh&&window.__fh.isAlarm&&window.__fh.isAlarm())) window.__scene.goHome(); },8000); }
     },
-    talk:function(on){ genie.classList.toggle('talking',!!on); },
+    talk:function(on){ genie.classList.toggle('talking',!!on); speaking=!!on; if(on) stopListen(); else if(wantListen) setTimeout(startListen,700); },
+    listenOn:function(){ wantListen=true; setTimeout(startListen,300); },
+    listenOff:function(){ wantListen=false; stopListen(); },
     isMapOpen:function(){ return document.body.classList.contains('mapOpen'); }
   };
+  genie.addEventListener('click',function(){ if(!revealed) return; try{ if(window.__fh&&window.__fh.panelHidden&&window.__fh.panelHidden()) window.__fh.sceneOpen(); }catch(e){} wantListen=true; micDenied=false; setTimeout(startListen,900); });
   document.getElementById('scBack').addEventListener('click',function(){
     if(window.__fh&&window.__fh.isAlarm&&window.__fh.isAlarm()) return;
     window.__scene.goHome();
