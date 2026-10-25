@@ -1420,7 +1420,7 @@ async function alaWork(){
         var poi=appRes[i];
         if(poi&&Array.isArray(poi.pois)&&poi.pois.length){
           poi.pois.forEach(function(q){
-            if(q&&alaState[key]&&isFinite(q.lat)&&isFinite(q.lng)&&alaAdd(key,u,c,[{type:'n',id:q.lat+','+q.lng,lat:q.lat,lon:q.lng,tags:{name:q.name},app:true}])) found++;
+            if(q&&alaState[key]&&isFinite(q.lat)&&isFinite(q.lng)&&alaAdd(key,u,c,[{type:'n',id:q.lat+','+q.lng,lat:q.lat,lon:q.lng,tags:{name:q.name},app:true,mw:(c.ar==='جامع'&&q.mawaqit!==undefined)?(q.mawaqit||false):undefined}])) found++;
           });
         } else
         if(poi&&alaState[key]&&alaAdd(key,u,c,[{type:'n',id:poi.lat+','+poi.lng,lat:poi.lat,lon:poi.lng,tags:{name:poi.name},app:true,mw:(c.ar==='جامع'&&poi.mawaqit!==undefined)?(poi.mawaqit||false):undefined}])) found++;
