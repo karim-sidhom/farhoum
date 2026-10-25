@@ -4188,7 +4188,7 @@ if('serviceWorker' in navigator){
   function hh(m){ return QT.minsToHHMM(m); }
   /* الأنماط (modes): كل نمط = نشاط في البرنامج */
   var MODS=[
-    {id:'pharm',ar:'صيدلية',e:'💊',cat:'صيدلية',dur:15,kw:/صيدل|pharmac|دواء|médicament|medicament/i},
+    {id:'pharm',ar:'صيدلية',e:'💊',cat:'صيدلية',dur:15,kw:/صيدل|pharmac|دواء|médicament|medicament|panadol|doliprane|dolipran|efferalgan|aspirine|aspegic|ibuprof|nurofen|brufen|parac[ée]tamol|spasfon|smecta|maalox|gaviscon|augmentin|amoxicilline|voltar[eè]ne|ventoline|vitamine|antibiotique|antalgique|sirop|pommade|بانادول|بنادول|دوليبران|ايفيرالقان|إيفيرالقان|اسبرين|أسبرين|ابوبروفان|إيبوبروفان|باراسيتامول|نوروفين|سبازفون|سماكتا|اوغمنتين|أوغمنتين|فولتارين|فنتولين|فيتامين|سيروب|مرهم|مضاد حيوي|مسكن/i},
     {id:'cafe',ar:'مقهى',e:'☕',cat:'قهوة',dur:30,food:'cafe',kw:/قهو|مقهى|مقه|cafe|café|coffee|كافي/i},
     {id:'resto',ar:'مطعم',e:'🍽️',cat:'مطعم',dur:60,food:'resto',kw:/مطعم|غداء|عشاء|نتغدى|نتعشى|ناكل|نكل|déjeuner|dejeuner|dîner|diner|restaurant|resto|manger|pizza|بيتزا|ساندويتش|سندويتش|سندويش|ساندويش|ساندوتش|سندوتش|sandwich|burger|برجر|برغر|شاورما|chawarma|shawarma|tacos|تاكوس|kebab|كباب|ملاوي|كسكسي|couscous|لبلابي|lablabi|pasta|معكرونة|مكرونة|sushi|سوشي|poulet|دجاج|poisson|سمك|حوت|salade|سلطة|مشوي|grillade|نحب ناكل|جيعان|جوعان|faim/i},
     {id:'fuel',ar:'وقود',e:'⛽',cat:'محطة وقود',dur:10,kw:/بنزين|وقود|carburant|essence|station service/i},
@@ -4240,7 +4240,20 @@ if('serviceWorker' in navigator){
   /* الكلام (الجنّي يحرّك جسمه وهو يتكلّم) */
   var spk=0;
   function talk(on){ var g=$('fhGenie'); if(g) g.classList.toggle('talking',!!on); try{ if(window.__scene) window.__scene.talk(on); }catch(e){} }
-  function toMap(){ try{ if(window.__scene) window.__scene.openMap('ask'); }catch(e){} }
+  function toMap(){}
+  var awaitMap=false;
+  var IDHS={idh:'https://idhaati.kieda.online',sudo:'https://sudo.kieda.online'}, IDH=IDHS.idh, curSrc='idh', idhFrames={}, idhFrame=null, idhBox=null, idhT=null, musicOn=false;
+  function idhEnsure(k){ k=k||'idh'; if(!idhBox){ idhBox=document.createElement('div'); idhBox.id='idhBox'; idhBox.style.cssText='position:fixed;left:-9999px;top:0;width:320px;height:320px;opacity:0;pointer-events:none'; document.body.appendChild(idhBox); }
+    if(!idhFrames[k]){ var f=document.createElement('iframe'); f.setAttribute('allow','autoplay; encrypted-media'); f.style.cssText='width:100%;height:100%;border:0'; f.src=IDHS[k]+'/?bridge=1'; idhBox.appendChild(f); idhFrames[k]=f; }
+    curSrc=k; IDH=IDHS[k]; idhFrame=idhFrames[k]; }
+  function idhSendTo(k,t){ try{ idhFrames[k].contentWindow.postMessage({type:t},IDHS[k]); }catch(e){} }
+  function idhSend(t){ idhSendTo(curSrc,t); }
+  function playMusic(which){ which=which||'idh'; for(var k in idhFrames){ if(k!==which) idhSendTo(k,'idh-pause'); } idhEnsure(which); musicOn=true; try{ if(window.__scene){ window.__scene.goHome(); window.__scene.dance(true); } }catch(e){} bubble(which==='sudo'?'🎵 SUDO':'🎵 إذاعتي'); speak([[which==='sudo'?'حاضر، راديو سودو':'حاضر، إذاعتي','ar-SA']]); clearTimeout(idhT); var n=0; (function go(){ idhSend('idh-play'); if(++n<8) idhT=setTimeout(go,1500); })(); }
+  function stopMusic(){ clearTimeout(idhT); for(var k in idhFrames) idhSendTo(k,'idh-pause'); musicOn=false; try{ if(window.__scene) window.__scene.dance(false); }catch(e){} bubble('حاضر'); speak([['حاضر','ar-SA']]); }
+  window.addEventListener('message',function(ev){ if(ev.origin!==IDHS.idh&&ev.origin!==IDHS.sudo) return; var d=ev.data; if(d&&d.type==='idh-state'&&d.playing){ clearTimeout(idhT); } });
+  function yesNo(t){ t=' '+String(t||'').toLowerCase().replace(/[،؟?!.,]/g,' ')+' '; var no=/\s(لا|لأ|لاء|non|no|موش|بلا|خليها|ما نحبش|مانحبش|nope)\s/.test(t), yes=/\s(نعم|اي|ايه|إيه|ايوه|أيوه|برشا|باهي|وري|وريني|افتح|حل|اه|أه|oui|yes|ok|ouais|ouvre|montre|d'accord)\s/.test(t); if(yes&&!no) return 'y'; if(no&&!yes) return 'n'; return null; }
+  function askMap(){ awaitMap=true; bubble('🗺️ تحب تشوف الخريطة ولا لا؟'); speak([['تحب تشوف الخريطة ولا لا؟','ar-SA']]); }
+  function mapAnswer(t){ if(!awaitMap) return false; var a=yesNo(t); if(!a){ awaitMap=false; return false; } awaitMap=false; if(a==='y'){ try{ if(window.__scene) window.__scene.openMap('ask'); }catch(e){} bubble('تفضل، هذه الخريطة'); speak([['تفضل، هذه الخريطة','ar-SA']]); } else { bubble('حاضر'); speak([['حاضر','ar-SA']]); } return true; }
   function speak(parts){
     try{ G.stopRead(); }catch(e){}
     var s=window.speechSynthesis; if(!s) return; spk=0;
@@ -4428,7 +4441,7 @@ if('serviceWorker' in navigator){
       }
       prog={legs:legs,routeRows:routeRows,anchor:anchor,start:cur,dayOff:dayOff,steps:steps,bud:bud,text:text,kind:opts.kind||'program',meal:opts.meal||null,intro:opts.intro||null};
       if(opts.prayer) prog.pray=await prayerTimes(anchor.pt); if(my!==buildSeq) return;
-      autoSelect(); retime(); render(true);
+      autoSelect(); retime(); render(true); if(window.__askNext){ window.__askNext=false; if(ids.some(function(x){ return ['pharm','hosp','dent','vet','optic'].indexOf(x)>=0; })) speak([['إن شاء الله لاباس','ar-SA']]); askMap(); }
     }catch(e){ if(my!==buildSeq) return; out.innerHTML='<div class="prgE">'+esc(e&&e.message||e)+'</div>'; bubble('وقعت مشكلة'); }
     if(my===buildSeq){ busy=false; $('fhGo').disabled=false; }
   }
@@ -4562,6 +4575,9 @@ if('serviceWorker' in navigator){
     return 'أنت على بعد '+(rd<1000?rd+' متر':(rd/1000).toFixed(1)+' كيلومتر')+' من أقرب سكة'+(rd<=ON_RAIL?' (داخل الـ150 م)':' — أنت في أمان');
   }
   var INTENTS=[
+    {id:'promo',re:/promo|promotion|عرض|عروض|تخفيض|تخفيضات|offre|réduction|reduction|solde/i},
+    {id:'rap',re:/(^|\s)راب(\s|$)|\brap\b|sudo|سودو/i},
+    {id:'music',re:/موسيق|موزيكا|مزيكا|أغني|اغني|أغاني|اغاني|راديو|إذاعة|اذاعة|musique|chanson|radio|music|song/i},
     {id:'risk',re:/خطر|اصطدام|risque|danger|قطار.{0,12}(قريب|وين|فين|قدّام)|train.{0,12}(proche|pres|près|où)/i},
     {id:'prayer',re:/صلا|أذان|اذان|إقامة|اقامة|جامع|مسجد|فجر|مغرب|prière|priere|adhan|mosqu|salat|maghrib|fajr/i},
     {id:'breakfast',re:/فطور|فطر|petit.?d[ée]j|breakfast|brunch/i},
@@ -4576,6 +4592,9 @@ if('serviceWorker' in navigator){
     if(text&&pts.length<2&&!sel.length&&mods.length<=1){
       var it=intentOf(text);
       if(it){ ensureAudio(); startWatch();
+        if(it==='rap') return playMusic('sudo');
+        if(it==='music') return playMusic();
+        if(it==='promo'){ var pk=G.keys(text.replace(/promotions?|promo|عروض|عرض|تخفيضات|تخفيض|offres?|r[ée]ductions?|soldes?/gi,' ')); return build({ids:mods.length?mods:['resto'],kind:'promo',keys:pk,intro:'هذه العروض والأسعار حواليك'}); }
         if(it==='risk'){ toMap(); return answerSimple(riskStatus()); }
         if(it==='prayer'){ toMap(); return prayerAnswer(); }
         if(it==='breakfast'){ toMap(); return breakfast(); }
@@ -4663,6 +4682,81 @@ if('serviceWorker' in navigator){
     if(on) alarmOn(best); else alarmOff();
   }
   setInterval(riskTick,3000);
+  /* ===== journée : prière à l'heure exacte + repas 7h30 / 12h30 / 16h30 / 19h30 ===== */
+  var dayT=null, dayFired={};
+  try{ dayFired=JSON.parse(localStorage.getItem('fhDayFired')||'{}')||{}; }catch(e){ dayFired={}; }
+  function dayKey(k){ var d=new Date(); return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate()+'-'+k; }
+  function dayMark(k){ dayFired[dayKey(k)]=1; try{ localStorage.setItem('fhDayFired',JSON.stringify(dayFired)); }catch(e){} }
+  var DAY_MEALS=[
+    {k:'bf',m:450,mod:'cafe',keys:BF_KEYS,name:'الفطور',say:'للفطور'},
+    {k:'lunch',m:750,mod:'resto',keys:null,name:'الغداء',say:'للغداء'},
+    {k:'cafe',m:990,mod:'cafe',keys:null,name:'القهوة',say:'لقهوة العصر'},
+    {k:'dinner',m:1170,mod:'resto',keys:null,name:'العشاء',say:'للعشاء'}
+  ];
+  /* تعرف؟ : أرخص طبق حقيقي من القائمة (بلا مشروبات ولا إضافات) عند مطاعم حولك */
+  function tipFrom(p){
+    if(!p||!p.steps||!p.steps.length) return null; var best=null;
+    p.steps.forEach(function(s){ (s.cands||[]).forEach(function(c){ (c.dishes||[]).forEach(function(d){
+      var tx=G.norm((d.nom||'')+' '+(d.cat||'')); if(/boisson|drink|jus|eau|soda|coca|sauce|supplement|supplément|extra|suppl|عصير|مشروب/.test(tx)) return;
+      if(!best||d.prix<best.prix) best={nom:d.nom,prix:d.prix,resto:c.nom};
+    }); }); });
+    return best;
+  }
+  function tipSay(p){
+    var t=tipFrom(p); if(!t) return;
+    var pr=Math.round(t.prix*100)/100;
+    bubble('💡 تعرف؟ '+t.nom+' بـ'+pr+' دينار عند '+t.resto);
+    speak([['تعرف؟','ar-SA'],[t.nom,'fr-FR'],['بـ'+pr+' دينار عند','ar-SA'],[t.resto,'fr-FR']]);
+  }
+  function dayReady(){ return !busy&&!alarm&&!awaitMap&&window.__scene&&window.__scene.isRevealed&&window.__scene.isRevealed()&&panel.style.display==='block'; }
+  async function dayTick(){
+    try{
+      if(!dayReady()) return;
+      var cur=nowMin(), i;
+      for(i=0;i<DAY_MEALS.length;i++){ var M=DAY_MEALS[i];
+        if(cur>=M.m&&cur<M.m+10&&!dayFired[dayKey(M.k)]){
+          dayMark(M.k);
+          await build({ids:[M.mod],kind:'brief',keys:M.keys||undefined,meal:M.name,intro:greet()+'، حان وقت '+M.name+' — هذا اللي نقترحه عليك'});
+          tipSay(prog); askMap(); return;
+        }
+      }
+      if(!dayT||dayT.day!==dayKey('p')){
+        var me=await myPos(), t=await prayerTimes([me.lat,me.lon]); dayT={day:dayKey('p'),t:t};
+      }
+      if(dayT.t){
+        for(i=0;i<5;i++){
+          if(cur>=dayT.t[i]&&cur<dayT.t[i]+5&&!dayFired[dayKey('pr'+i)]){
+            dayMark('pr'+i);
+            await build({ids:['mosque'],kind:'prayer',prayer:true,salati:true,intro:'حان وقت صلاة '+PN[i]+' — هذا أقرب جامع'});
+            askMap(); return;
+          }
+        }
+      }
+    }catch(e){}
+  }
+  setInterval(dayTick,20000);
+  /* ===== Farhoum cherche tout seul les prix bas et les annonce de temps en temps (toutes les 45 min) ===== */
+  var promoLast=Date.now(), promoSeen={};
+  async function promoTick(){
+    try{
+      var every=window.__fhPromoEvery||45*60000;
+      if(Date.now()-promoLast<every||!dayReady()) return;
+      promoLast=Date.now();
+      var me=await myPos(), zone=[]; G.setC(me.lat,me.lon);
+      try{ zone=await G.gather(G.getId(),document.createElement('div'),1500)||[]; }catch(e){ zone=[]; }
+      var list=[]; zone.forEach(function(z){ (z.plats||[]).forEach(function(p){ var pr=Number(p.prix); if(!isFinite(pr)||pr<=0) return;
+        var tx=G.norm((p.nom||'')+' '+(p.categorie||'')); if(/boisson|drink|jus|eau|soda|coca|sauce|supplement|supplément|extra|suppl|عصير|مشروب/.test(tx)) return;
+        list.push({nom:p.nom,prix:pr,resto:z.r.nom}); }); });
+      list.sort(function(a,b){ return a.prix-b.prix; });
+      var fresh=list.filter(function(x){ return !promoSeen[dayKey(x.resto+'|'+x.nom)]; }).slice(0,3);
+      if(!fresh.length||!dayReady()) return;
+      var t=fresh[Math.floor(Math.random()*fresh.length)]; promoSeen[dayKey(t.resto+'|'+t.nom)]=1;
+      var pr=Math.round(t.prix*100)/100;
+      bubble('💡 تعرف؟ '+t.nom+' بـ'+pr+' دينار عند '+t.resto);
+      speak([['تعرف؟','ar-SA'],[t.nom,'fr-FR'],['بـ'+pr+' دينار عند','ar-SA'],[t.resto,'fr-FR']]);
+    }catch(e){}
+  }
+  setInterval(promoTick,30000);
   /* ====== الواجهة ====== */
   var css=document.createElement('style');
   css.textContent='#fhBtn{position:fixed;right:12px;bottom:calc(14px + env(safe-area-inset-bottom));z-index:1100;width:68px;height:68px;border-radius:50%;border:2px solid #d4af37;background:radial-gradient(circle at 40% 30%,#1b2f9e,#0d1a6e);box-shadow:0 4px 18px #000a,0 0 18px #4fb0ff88;padding:0;cursor:pointer;overflow:hidden;animation:fhFloat 3.2s ease-in-out infinite}#fhBtn svg{width:100%;height:100%;display:block}@keyframes fhFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}'
@@ -4716,7 +4810,7 @@ if('serviceWorker' in navigator){
     var t=e.target; if(!prog||!t.classList||!t.classList.contains('fhDish')) return;
     var s=prog.steps[+t.dataset.s], c=s.cands[s.sel]; c.picked[+t.dataset.d]=t.checked; render(false);
   });
-  window.__fh={ask:function(t){ bubble('🎤 '+t); setChips([]); $('fhTxt').value=t; return go(); },hint:bubble,panelHidden:function(){ return panel.style.display!=='block'; },sceneOpen:function(){ panel.style.display='block'; gen.classList.add('on'); back.classList.add('on'); gen.classList.remove('dim'); back.classList.remove('dim'); ensureAudio(); startWatch(); panel.dataset.hi='1'; },sceneBrief:function(){ briefing(); },closePanel:closeP,build:build,go:go,state:function(){ return prog; },ohOpen:ohOpen,detectMods:detectMods,riskTick:riskTick,setMyPos:function(la,lo){ myP={lat:la,lon:lo,t:Date.now()}; },isAlarm:function(){ return alarm; },qMsg:function(d){ window.dispatchEvent(new MessageEvent('message',{data:d,origin:'https://quitari.kieda.online'})); },intentOf:intentOf,briefing:briefing};
+  window.__fh={ask:function(t){ if(musicOn){ if(/وقف|أوقف|اوقف|اطفئ|أطفئ|سكر|سكّر|stop|arr[êe]te|ferme/i.test(t)){ stopMusic(); return; } if(!/فرحوم|فرهوم|farhoum/i.test(t)) return; } bubble('🎤 '+t); if(mapAnswer(t)) return; awaitMap=false; setChips([]); $('fhTxt').value=t; window.__askNext=true; var r=go(); Promise.resolve(r).then(function(){ window.__askNext=false; },function(){ window.__askNext=false; }); return r; },hint:bubble,panelHidden:function(){ return panel.style.display!=='block'; },sceneOpen:function(){ panel.style.display='block'; gen.classList.add('on'); back.classList.add('on'); gen.classList.remove('dim'); back.classList.remove('dim'); ensureAudio(); startWatch(); panel.dataset.hi='1'; },sceneBrief:function(){ briefing(); },closePanel:closeP,build:build,go:go,state:function(){ return prog; },ohOpen:ohOpen,detectMods:detectMods,riskTick:riskTick,setMyPos:function(la,lo){ myP={lat:la,lon:lo,t:Date.now()}; },isAlarm:function(){ return alarm; },qMsg:function(d){ window.dispatchEvent(new MessageEvent('message',{data:d,origin:'https://quitari.kieda.online'})); },intentOf:intentOf,briefing:briefing};
 })();
 </script>
 <script>
@@ -4976,6 +5070,8 @@ if('serviceWorker' in navigator){
     talk:function(on){ genie.classList.toggle('talking',!!on); speaking=!!on; if(on) stopListen(); else if(wantListen) setTimeout(startListen,700); },
     listenOn:function(){ wantListen=true; setTimeout(startListen,300); },
     listenOff:function(){ wantListen=false; stopListen(); },
+    isRevealed:function(){ return revealed; },
+    dance:function(on){ genie.classList.toggle('dancing',!!on); },
     isMapOpen:function(){ return document.body.classList.contains('mapOpen'); }
   };
   genie.addEventListener('click',function(){ if(!revealed) return; try{ if(window.__fh&&window.__fh.panelHidden&&window.__fh.panelHidden()) window.__fh.sceneOpen(); }catch(e){} wantListen=true; micDenied=false; setTimeout(startListen,900); });
