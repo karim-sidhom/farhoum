@@ -1333,6 +1333,29 @@ function alaCatByAr(ar){
   for(var i=0;i<ALA_CATS.length;i++){ if(ALA_CATS[i].ar===ar) return ALA_CATS[i]; }
   return null;
 }
+/* 🗄️ ذاكرة دائمة في Supabase (جدول ala_store) — لا انتهاء صلاحية، مشتركة بين كل الأجهزة. localStorage يبقى طبقة سريعة محلية */
+var PDB_URL=SUPABASE_URL+'/rest/v1/ala_store', pdbQ={}, pdbT=null, pdbOff=false;
+async function pdbGet(kind,key){
+  if(pdbOff) return null;
+  try{
+    var r=await fetch(PDB_URL+'?kind=eq.'+encodeURIComponent(kind)+'&key=eq.'+encodeURIComponent(key)+'&select=data&limit=1',{headers:{apikey:SUPABASE_KEY}});
+    if(!r.ok){ if(r.status===404) pdbOff=true; return null; }
+    var j=await r.json(); return (j&&j[0]&&j[0].data!=null)?j[0].data:null;
+  }catch(e){ return null; }
+}
+function pdbPut(kind,key,data){
+  if(pdbOff) return; pdbQ[kind+'\u0001'+key]={kind:kind,key:key,data:data,updated_at:new Date().toISOString()};
+  clearTimeout(pdbT); pdbT=setTimeout(pdbFlush,1500);
+}
+async function pdbFlush(){
+  var ks=Object.keys(pdbQ); if(!ks.length||pdbOff) return;
+  var rows=ks.map(function(k){ return pdbQ[k]; }); pdbQ={};
+  try{
+    var r=await fetch(PDB_URL+'?on_conflict=kind,key',{method:'POST',headers:{apikey:SUPABASE_KEY,Authorization:'Bearer '+SUPABASE_KEY,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(rows)});
+    if(!r.ok){ if(r.status===404) pdbOff=true; else rows.forEach(function(x){ pdbQ[x.kind+'\u0001'+x.key]=pdbQ[x.kind+'\u0001'+x.key]||x; }); }
+  }catch(e){ rows.forEach(function(x){ pdbQ[x.kind+'\u0001'+x.key]=pdbQ[x.kind+'\u0001'+x.key]||x; }); }
+}
+window.addEventListener('pagehide',function(){ try{ pdbFlush(); }catch(e){} });
 /* ذاكرة دائمة (localStorage) لنتائج الخدمات القريبة من الدائرة الخضراء: خلية ~500 م، لا يُعاد البحث الشبكي لموقع سبق رصده */
 var ALA_CACHE_KEY='ala_cache_v4', ALA_CACHE_MAX=1200, alaCache=null;
 function alaCLoad(){ if(alaCache) return alaCache; try{ alaCache=JSON.parse(localStorage.getItem(ALA_CACHE_KEY)||'{}')||{}; }catch(e){ alaCache={}; } return alaCache; }
@@ -1341,6 +1364,7 @@ function alaCSave(ck,res,complete){
   var c=alaCLoad(); c[ck]={at:Date.now(),res:res,complete:!!complete};
   var ks=Object.keys(c); if(ks.length>ALA_CACHE_MAX){ ks.sort(function(a,b){ return c[a].at-c[b].at; }).slice(0,ks.length-ALA_CACHE_MAX).forEach(function(k){ delete c[k]; }); }
   try{ localStorage.setItem(ALA_CACHE_KEY,JSON.stringify(c)); }catch(e){}
+  pdbPut('ala',ck,c[ck]);
 }
 /* APP-BRIDGE-CLIENT : صيدليتي / محطتي / صلاتي — فرحوم يسأل هذه التطبيقات مباشرة (iframe خفي ?bridge=1)؛ إذا ما ردّتش يبقى البحث القديم (Overpass) */
 var ALA_APP_ORIGIN={'صيدلية':'https://saydaliati.kieda.online','محطة وقود':'https://mahattati.kieda.online','جامع':'https://salati.kieda.online','صرّاف':'https://dabi.kieda.online'};
@@ -1386,6 +1410,7 @@ async function alaWork(){
     var wk=null;
     st.found=[];
     var ck=alaCKey(u), ce=alaCLoad()[ck], fromCache=false;
+    if(!ce){ var dbe=await pdbGet('ala',ck); if(dbe&&dbe.res){ ce=dbe; alaCLoad()[ck]=dbe; try{ localStorage.setItem(ALA_CACHE_KEY,JSON.stringify(alaCLoad())); }catch(e){} } }
     if(ce && ce.res){
       ce.res.forEach(function(r){
         var c=alaCatByAr(r.ar);
@@ -2969,21 +2994,23 @@ if('serviceWorker' in navigator){
   function geoSave(){ try{ localStorage.setItem(GK,JSON.stringify(geoC)); }catch(e){} }
   async function glvGeo(r,city){
     var m=/\/stores\/([^/?#]+)/.exec(r.lien||''); if(!m) return null; var slug=m[1], k=city.slug+'|'+slug;
-    if(geoC[k]&&Date.now()-geoC[k].at<30*86400000) return geoC[k];
+    if(geoC[k]) return geoC[k];
+    var dbg=await pdbGet('geo',k); if(dbg){ geoC[k]=dbg; geoSave(); return dbg; }
     try{
       var res=await fetch(W+'/geo?slug='+encodeURIComponent(slug)+'&ville='+city.slug+'&city='+city.c+'&lat='+city.lat+'&lng='+city.lon+'&addr='+encodeURIComponent(city.slug));
       if(!res.ok) return null; var j=await res.json();
       var o={at:Date.now(),lat:j.latitude,lon:j.longitude,adresse:j.adresse||null};
-      if(o.lat!=null||o.adresse){ geoC[k]=o; geoSave(); return o; } return null;
+      if(o.lat!=null||o.adresse){ geoC[k]=o; geoSave(); pdbPut('geo',k,o); return o; } return null;
     }catch(e){ return null; }
   }
   var lastNom=0;
   async function glvGeocode(addr,city){
     var k='a|'+addr; if(geoC[k]) return geoC[k].p;
+    var dba=await pdbGet('geo',k); if(dba&&dba.p){ geoC[k]=dba; geoSave(); return dba.p; }
     var wait=1100-(Date.now()-lastNom); if(wait>0) await new Promise(function(r2){ setTimeout(r2,wait); }); lastNom=Date.now();
     try{
       var res=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=tn&viewbox='+(city.lon-0.6)+','+(city.lat+0.6)+','+(city.lon+0.6)+','+(city.lat-0.6)+'&bounded=1&q='+encodeURIComponent(addr+', '+city.slug));
-      var j=await res.json(); if(j&&j[0]){ var p={lat:parseFloat(j[0].lat),lon:parseFloat(j[0].lon)}; geoC[k]={at:Date.now(),p:p}; geoSave(); return p; }
+      var j=await res.json(); if(j&&j[0]){ var p={lat:parseFloat(j[0].lat),lon:parseFloat(j[0].lon)}; geoC[k]={at:Date.now(),p:p}; geoSave(); pdbPut('geo',k,geoC[k]); return p; }
     }catch(e){}
     return null;
   }
@@ -3212,7 +3239,8 @@ if('serviceWorker' in navigator){
   /* 📖 قائمة المطعم عند الضغط عليه */
   var MKEY='adv_menu_v1', menuMem={}, menuAt=Date.now(), menuT=null;
   try{ var mc=JSON.parse(localStorage.getItem(MKEY)||'null'); if(mc&&mc.m&&Date.now()-mc.at<6*3600000){ menuMem=mc.m; menuAt=mc.at; } }catch(e){}
-  function menuSet(k,v){ menuMem[k]=v.map(function(p){ return {nom:p.nom,prix:p.prix,categorie:p.categorie}; }); clearTimeout(menuT); menuT=setTimeout(function(){ try{ localStorage.setItem(MKEY,JSON.stringify({at:menuAt,m:menuMem})); }catch(e){} },2000); }
+  function menuSet(k,v){ menuMem[k]=v.map(function(p){ return {nom:p.nom,prix:p.prix,categorie:p.categorie}; }); pdbPut('menu',k,menuMem[k]); clearTimeout(menuT); menuT=setTimeout(function(){ try{ localStorage.setItem(MKEY,JSON.stringify({at:menuAt,m:menuMem})); }catch(e){} },2000); }
+  async function menuDb(k){ var v=await pdbGet('menu',k); if(v&&v.length){ menuMem[k]=v; return v; } return null; }
   function advMenuLnk(lien,ville,nom){
     var m=/\/stores\/([^/?#]+)/.exec(lien||''); if(!m) return '';
     return '<a href="#" class="glvMenuLnk" data-slug="'+esc(m[1])+'" data-ville="'+esc(ville)+'" data-nom="'+esc(nom)+'" data-lien="'+esc(lien)+'" style="color:#ffd966;font-weight:800">📖 القائمة</a>';
@@ -3224,7 +3252,7 @@ if('serviceWorker' in navigator){
     var head='<div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:16px">📖 '+esc(nom)+'</b><button id="glvMenuX" style="background:#d4af37;color:#0d1a6e;border:0;border-radius:8px;padding:4px 10px;font-weight:800;cursor:pointer">✕</button></div>';
     box.innerHTML=head+'<div class="prgR">⏳ جارٍ تحميل القائمة…</div>';
     document.getElementById('glvMenuX').onclick=function(){ box.style.display='none'; };
-    var k=ville+'|'+slug, plats=menuMem[k];
+    var k=ville+'|'+slug, plats=menuMem[k]||await menuDb(k);
     if(!plats){ plats=[]; try{ var res=await fetch(W+'/menu?slug='+encodeURIComponent(slug)+'&ville='+encodeURIComponent(ville)); if(res.ok){ var j=await res.json(); plats=(j&&j.plats)||[]; } }catch(e){} if(plats.length) menuSet(k,plats); }
     var cats=[], by={}; plats.forEach(function(p){ var c=p.categorie||'—'; if(!by[c]){ by[c]=[]; cats.push(c); } by[c].push(p); });
     var body=!plats.length?'<div class="prgE">القائمة غير متوفرة.</div>':cats.map(function(c){ return '<div class="prgR"><b>'+esc(c)+'</b>'+by[c].map(function(p){ return '<br>• '+esc(p.nom)+(p.prix!=null?' — <b>'+esc(p.prix)+' DT</b>':''); }).join('')+'</div>'; }).join('');
@@ -3263,7 +3291,7 @@ if('serviceWorker' in navigator){
     }
     if(d.dataset.slug){
       d.innerHTML=lines.concat(['💰 …']).join('<br>');
-      var k=d.dataset.ville+'|'+d.dataset.slug, pl=menuMem[k];
+      var k=d.dataset.ville+'|'+d.dataset.slug, pl=menuMem[k]||await menuDb(k);
       if(!pl){ pl=[]; try{ var res=await fetch(W+'/menu?slug='+encodeURIComponent(d.dataset.slug)+'&ville='+encodeURIComponent(d.dataset.ville)); if(res.ok){ var j=await res.json(); pl=(j&&j.plats)||[]; } }catch(e){} if(pl.length) menuSet(k,pl); }
       var pr=pl.map(function(p){return Number(p.prix);}).filter(function(x){return isFinite(x)&&x>0;});
       lines.push(pr.length?'💰 من '+Math.min.apply(null,pr)+' إلى '+Math.max.apply(null,pr)+' DT ('+pr.length+' طبق)':'💰 القائمة غير متوفرة');
@@ -3421,7 +3449,7 @@ if('serviceWorker' in navigator){
         if(d!=null&&d>radius) return;
         var z={r:r,d:d,v:city.slug,lat:la,lon:lo,plats:[]}, m=/\/stores\/([^/?#]+)/.exec(r.lien||'');
         if(m){
-          var k=city.slug+'|'+m[1], pl=menuMem[k];
+          var k=city.slug+'|'+m[1], pl=menuMem[k]||await menuDb(k);
           if(!pl){ pl=[]; try{ var res=await fetch(W+'/menu?slug='+encodeURIComponent(m[1])+'&ville='+encodeURIComponent(city.slug)); if(res.ok){ var jj=await res.json(); pl=(jj&&jj.plats)||[]; } }catch(e){} if(pl.length) menuSet(k,pl); }
           z.plats=pl;
         }
