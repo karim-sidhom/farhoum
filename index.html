@@ -1334,7 +1334,7 @@ function alaCatByAr(ar){
   return null;
 }
 /* ذاكرة دائمة (localStorage) لنتائج الخدمات القريبة من الدائرة الخضراء: خلية ~500 م، لا يُعاد البحث الشبكي لموقع سبق رصده */
-var ALA_CACHE_KEY='ala_cache_v3', ALA_CACHE_MAX=1200, alaCache=null;
+var ALA_CACHE_KEY='ala_cache_v4', ALA_CACHE_MAX=1200, alaCache=null;
 function alaCLoad(){ if(alaCache) return alaCache; try{ alaCache=JSON.parse(localStorage.getItem(ALA_CACHE_KEY)||'{}')||{}; }catch(e){ alaCache={}; } return alaCache; }
 function alaCKey(u){ return (Math.round(u.lat*200)/200).toFixed(3)+','+(Math.round(u.lon*200)/200).toFixed(3); }
 function alaCSave(ck,res,complete){
