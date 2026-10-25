@@ -4565,6 +4565,8 @@ if('serviceWorker' in navigator){
     if(!ids.length&&pts.length<2){ out.innerHTML='<div class="prgE">اكتب برنامجك أو اختر نمطاً (💊 ☕ 🍽️ …) ثم اضغط «اصنع البرنامج».</div>'; bubble('شنيّة برنامجك؟ قلّي وين تمشي وشنوّة تحب (صيدلية، قهوة، مطعم…)'); speak([['شنيّة برنامجك؟ قلّي وين تمشي وشنوّة تحب','ar-SA']]); return; }
     try{ setCostume(opts.kind==='brief'?null:costumeOf(ids),text); }catch(e){} gen.classList.remove('dim'); back.classList.remove('dim'); if(!opts.ids) setChips(ids); busy=true; $('fhGo').disabled=true;
     out.innerHTML='<div class="prgR">⏳ فرحوم يحضّر البرنامج…</div>'; bubble('نحضّر لك البرنامج… دقيقة');
+    /* demande vocale : le panneau s'affiche tout de suite (avancement, puis résultats ou erreur) */
+    if(window.__askNext){ panel.classList.add('fhList'); panel.style.display='block'; }
     try{
       var bud=budget(), dayOff=opts.dayOff!=null?opts.dayOff:(/غدوة|غدا|غدًا|demain/i.test(text)?1:0), legs=[], routeRows=[], anchor=null, cur=null;
       if(pts.length>=2){
@@ -4595,7 +4597,7 @@ if('serviceWorker' in navigator){
       prog={legs:legs,routeRows:routeRows,anchor:anchor,start:cur,dayOff:dayOff,steps:steps,bud:bud,text:text,kind:opts.kind||'program',meal:opts.meal||null,intro:opts.intro||null};
       if(opts.prayer) prog.pray=await prayerTimes(anchor.pt); if(my!==buildSeq) return;
       autoSelect(); retime(); render(true); if(window.__askNext){ window.__askNext=false; if(ids.some(function(x){ return ['pharm','hosp','dent','vet','optic'].indexOf(x)>=0; })) speak([['إن شاء الله لاباس','ar-SA']],true); askMap(); }
-    }catch(e){ if(my!==buildSeq) return; out.innerHTML='<div class="prgE">'+esc(e&&e.message||e)+'</div>'; bubble('وقعت مشكلة'); }
+    }catch(e){ if(my!==buildSeq) return; out.innerHTML='<div class="prgE">'+esc(e&&e.message||e)+'</div>'; bubble('وقعت مشكلة'); if(window.__askNext){ panel.classList.add('fhList'); panel.style.display='block'; } }
     if(my===buildSeq){ busy=false; $('fhGo').disabled=false; }
   }
   function dayIdx(extra){ var d=new Date(Date.now()+((prog?prog.dayOff:0)+(extra||0))*86400000); return (d.getDay()+6)%7; }
