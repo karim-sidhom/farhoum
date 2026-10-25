@@ -4444,15 +4444,18 @@ if('serviceWorker' in navigator){
     return res.slice(0,4);
   }
   async function candidatesFor(mod,a,keys,bud,opts){
-    var osm=mod.food?[]:await osmNear(mod,a[0],a[1]), cands=[];
+    var osmP=osmNear(mod,a[0],a[1]), osm=[], cands=[]; osmP.catch(function(){});
     if(mod.food){
       var zone=[]; try{ G.setC(a[0],a[1]); zone=await G.gather(G.getId(),document.createElement('div'),1500)||[]; }catch(e){ zone=[]; }
       cands=foodCands(mod,zone,(opts&&opts.keys)||(mod.food==='cafe'?CAFE_KEYS:keys),bud,a);
+      /* Glovo d'abord : si des restaurants Glovo avec position sont trouvés, réponse immédiate ; sinon (aucun / sans position) on attend OpenStreetMap comme avant */
+      if(!cands.length||cands.some(function(c){ return c.lat==null; })) osm=await osmP;
       cands.forEach(function(c){
         for(var i=0;i<osm.length;i++){ if(G.same(c.nom,osm[i].nom)){ c.hours=osm[i].hours; c.phone=osm[i].phone; if(c.lat==null){ c.lat=osm[i].lat; c.lon=osm[i].lon; } osm[i].used=true; break; } }
       });
       cands=cands.filter(function(c){ return c.lat!=null; });
     }
+    if(!mod.food) osm=await osmP;
     if(mod.id==='mosque'&&opts&&opts.salati){
       var sc=await salatiCands(a);
       sc.forEach(function(c){ c.d0=QT.haversine(a,[c.lat,c.lon]); });
