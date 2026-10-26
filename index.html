@@ -4560,7 +4560,7 @@ if('serviceWorker' in navigator){
       prog={legs:legs,routeRows:routeRows,anchor:anchor,start:cur,dayOff:dayOff,steps:steps,bud:bud,text:text,kind:opts.kind||'program',meal:opts.meal||null,intro:opts.intro||null};
       if(opts.prayer) prog.pray=await prayerTimes(anchor.pt); if(my!==buildSeq) return;
       autoSelect(); retime(); render(true); if(window.__askNext){ window.__askNext=false; if(ids.some(function(x){ return ['pharm','hosp','dent','vet','optic'].indexOf(x)>=0; })) speak([['إن شاء الله لاباس','ar-SA']],true); askMap(); }
-    }catch(e){ if(my!==buildSeq) return; out.innerHTML='<div class="prgE">'+esc(e&&e.message||e)+'</div>'; bubble('وقعت مشكلة'); }
+    }catch(e){ if(my!==buildSeq) return; out.innerHTML='<div class="prgE">'+esc(e&&e.message||e)+'</div>'; panel.classList.add('fhList'); panel.style.display='block'; bubble('وقعت مشكلة'); }
     if(my===buildSeq){ busy=false; $('fhGo').disabled=false; }
   }
   function dayIdx(extra){ var d=new Date(Date.now()+((prog?prog.dayOff:0)+(extra||0))*86400000); return (d.getDay()+6)%7; }
