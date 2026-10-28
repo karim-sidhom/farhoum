@@ -1155,6 +1155,7 @@ const T = {
     f2Search:q=>`Je cherche ${q} près de vous.`,f2Head:q=>`Voici ce que j'ai trouvé pour ${q}.`,
     f2None:"Je n'ai rien trouvé.",f2Fail:"La recherche n'est pas disponible pour le moment.",
     f2At:(d,w)=>`à ${d}, ${w}.`,
+    permGps:"Position",permMic:"Micro",permYes:"autorisé",permNo:"refusé",
     mapOpen:"Voici la carte.",mapNone:"La carte n'est pas disponible sans internet.",
     f2Wide:km=>`Rien dans 3 kilomètres. Voici ce qu'il y a dans ${km} kilomètres.`,f2Stat:(n,m,k)=>`J'ai lu ${n} restaurants dans ${k} kilomètres, dont ${m} avec un menu, et aucun plat ne correspond.`},
   ar:{tts:"ar-SA",title:"فرحوم",go:"أين أنا؟",repeat:"أعد",stop:"صمت",
@@ -1199,6 +1200,7 @@ const T = {
     f2Search:q=>`أبحث عن ${q} قربك.`,f2Head:q=>`هذا ما وجدته لـ ${q}.`,
     f2None:"لم أجد شيئاً.",f2Fail:"البحث غير متوفر حالياً.",
     f2At:(d,w)=>`على بعد ${d}، ${w}.`,
+    permGps:"الموقع",permMic:"الميكروفون",permYes:"مسموح",permNo:"مرفوض",
     mapOpen:"هذه هي الخريطة.",mapNone:"الخريطة غير متوفرة بدون إنترنت.",
     f2Wide:km=>`لا شيء في 3 كيلومترات. هذا ما وجدته في ${km} كيلومتر.`,f2Stat:(n,m,k)=>`قرأت ${n} مطعماً في ${k} كيلومتر، منها ${m} بقائمة، ولا طبق مطابق.`}
 };
@@ -1922,6 +1924,15 @@ function gpsFail(e){
 }
 function startGpsWatch(){
   if(gpsWatchId!=null || !navigator.geolocation) return;
+  /* si aucune position après 8 s, Farhoum dit lui-même pourquoi */
+  setTimeout(async ()=>{
+    if(gpsFix) return;
+    let denied = false;
+    try{ if(navigator.permissions){ const r = await navigator.permissions.query({name:"geolocation"}); denied = r.state==="denied"; } }catch(_){}
+    if(gpsFix) return;
+    const m = !window.isSecureContext ? S().gpsHttps : denied ? S().gpsDenied : S().gpsSlow;
+    lastText = m; $("out").textContent = m; speak(m,true);
+  },8000);
   status("GPS : recherche…");
   /* 1) lecture haute précision, comme Qitari */
   gpsWatchId = -1;
@@ -2117,13 +2128,22 @@ function waitSpeech(){
 }
 async function askPermissions(){
   speak(S().greet+" "+S().perm);
-  await startCompass();                       // boussole (iPhone : demande immédiate)
+  const compassP = startCompass();            // boussole (iPhone : demande immédiate, dans le geste du toucher)
+  /* demandes explicites, tout de suite après le toucher : position puis micro (sans attendre la fin du message d'accueil) */
+  const sx = S(), st = {gps:false,mic:false};
+  const show = ()=>{ const t = sx.permGps+" : "+(st.gps?sx.permYes:sx.permNo)+" · "+sx.permMic+" : "+(st.mic?sx.permYes:sx.permNo); $("out").textContent = t; };
+  st.gps = await new Promise(ok=>{
+    if(!navigator.geolocation){ ok(false); return; }
+    navigator.geolocation.getCurrentPosition(p=>{ gpsAccept(p); ok(true); }, e=>{ gpsFail(e); ok(false); }, {enableHighAccuracy:false,maximumAge:600000,timeout:30000});
+  });
+  try{
+    const m = await navigator.mediaDevices.getUserMedia({audio:true});
+    m.getTracks().forEach(t=>t.stop()); micOK = true; st.mic = true;
+  }catch(_){ micOK = false; }
+  show();
+  await compassP;
   await waitSpeech();
   startGpsWatch();
-  try{
-    const st = await navigator.mediaDevices.getUserMedia({audio:true});
-    st.getTracks().forEach(t=>t.stop()); micOK = true;
-  }catch(_){ micOK = false; }
 }
 let started = false, tapTimer = null, pressTimer = null, pressFired = false;
 async function activate(){
