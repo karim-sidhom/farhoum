@@ -1210,8 +1210,8 @@ const S = () => T[L];
 
 /* ---------- Voix ---------- */
 let lastText = "", speaking = false, listening = false, rec = null;
-let svcToken = 0, readId = 0;
-function hush(){ svcToken++; readId++; speechSynthesis.cancel(); }
+let svcToken = 0, readId = 0, svcGen = 0, dishMode = false;
+function hush(){ svcToken++; svcGen++; readId++; dishMode = false; speechSynthesis.cancel(); }
 function speak(text, add){
   lastText = add ? lastText+" "+text : text;
   $("out").textContent = lastText;
@@ -1780,7 +1780,7 @@ function dishBudget(text){
   const m = /(?:moins de|max(?:imum)?|budget|jusqu'?[àa]|ميزانية|أقل من|اقل من)\s*(\d+(?:[.,]\d+)?)/i.exec(text); return m ? parseFloat(m[1].replace(",",".")) : 0;
 }
 async function askDish(text){
-  svcToken++; speechSynthesis.cancel();
+  svcToken++; svcGen++; dishMode = true; speechSynthesis.cancel();
   const id = ++readId, s = S(), t = dishNorm(text), bud = dishBudget(text);
   let label = text.trim();
   for(const g of DISH_SYN){ const w = g[0].find(x=>t.indexOf(dishNorm(x))>=0); if(w){ label = w; break; } }
@@ -2046,6 +2046,7 @@ async function addressText(lat,lon){
 
 async function whereAmI(){
   if(busy) return; busy = true;
+  const myGen = ++svcGen; dishMode = false;
   try{
     speak(S().locating);
     const p = await getPos();
@@ -2067,9 +2068,8 @@ async function whereAmI(){
     const near = pl ? lastNear : [];
     mapDataPos = {lat,lon}; if(mapOpen) renderMap();
     speak(txt.trim(), first);
-    const tk = svcToken;
     svcP.then(found=>{
-      if(!found || svcToken!==tk) return;
+      if(!found || svcGen!==myGen) return;
       lastSvc = found; mapDataPos = {lat,lon}; if(mapOpen) renderMap();
       const t = servicesText(lat,lon,found,near);
       if(t) speak(t,true);
@@ -2093,12 +2093,23 @@ function setAuto(on){
       if(h != null && !isNaN(h) && p.coords.speed > 0.7) heading = h;
       const now = Date.now();
       if(lastSpoken && (dist(lat,lon,lastSpoken.lat,lastSpoken.lon) < 35 || now-lastTime < 15000)) return;
-      if(busy || speechSynthesis.speaking) return;
+      if(busy) return;
+      if(dishMode){ if(speechSynthesis.speaking) return; dishMode = false; }
       lastSpoken = {lat,lon}; lastTime = now;
+      const myGen = ++svcGen;
+      const svcP = fetchServices(lat,lon).catch(()=>null);
       try{
         const {items} = await fetchPlaces(lat,lon);
+        if(myGen!==svcGen) return;
         const txt = describe(lat,lon,items).split(". ").slice(0,2).join(". ");
-        speak(txt);
+        speak(txt, true);
+        const near = lastNear;
+        svcP.then(found=>{
+          if(!found || svcGen!==myGen) return;
+          lastSvc = found; mapDataPos = {lat,lon}; if(mapOpen) renderMap();
+          const t = servicesText(lat,lon,found,near);
+          if(t) speak(t,true);
+        });
       }catch(_){}
     },()=>{},{enableHighAccuracy:true,maximumAge:2000});
     keepAwake();
