@@ -4387,10 +4387,17 @@ if('serviceWorker' in navigator){
   }
   function fmtP(p){ return (Math.round(p*1000)/1000)+' DT'; }
   function fmtD(d){ return d<1000?Math.round(d)+' م':(d/1000).toFixed(1)+' كم'; }
-  async function myPos(){
+  async function myPos(fast){
     if(window.__glvRef&&window.__glvRef.lat!=null) return {lat:window.__glvRef.lat,lon:window.__glvRef.lon,label:'موقعك'};
+    if(fast){
+      /* attente zéro : dernière position connue (GPS en cours, ou mémorisée), sinon centre de la carte */
+      var kp=(myP&&myP.lat!=null)?myP:null;
+      if(!kp){ try{ var sv=JSON.parse(localStorage.getItem('fh_lastpos')||'null'); if(sv&&isFinite(sv.lat)&&isFinite(sv.lon)) kp=sv; }catch(e){} }
+      if(kp) return {lat:kp.lat,lon:kp.lon,label:'موقعك',approx:true};
+      var c0=map.getCenter(); return {lat:c0.lat,lon:c0.lng,label:'وسط الخريطة',approx:true};
+    }
     var p=await new Promise(function(ok){ if(!navigator.geolocation){ ok(null); return; } navigator.geolocation.getCurrentPosition(function(x){ ok({lat:x.coords.latitude,lon:x.coords.longitude}); },function(){ ok(null); },{timeout:7000,maximumAge:300000}); });
-    if(p){ p.label='موقعك'; return p; }
+    if(p){ try{ localStorage.setItem('fh_lastpos',JSON.stringify({lat:p.lat,lon:p.lon})); }catch(e){} p.label='موقعك'; return p; }
     var c=map.getCenter(); return {lat:c.lat,lon:c.lng,label:'وسط الخريطة'};
   }
   var SC=null;
@@ -4407,12 +4414,12 @@ if('serviceWorker' in navigator){
     if(!c) return null;
     return '["'+c.k+'"="'+c.v+'"]'+(c.x?'["'+c.x[0]+'"="'+c.x[1]+'"]':'');
   }
-  async function osmNear(mod,lat,lon){
+  async function osmNear(mod,lat,lon,fast){
     var f=osmFilter(mod); if(!f) return [];
     var radii=[1200,3500], out=[];
     /* Qitari en arrière-plan : lieux déjà repérés autour de toi (mémoire de la carte) → réponse immédiate, sans attendre Overpass */
     try{ var ce=alaCLoad()[alaCKey({lat:lat,lon:lon})]; if(ce&&ce.res) ce.res.forEach(function(r){ if(r.ar===mod.cat&&r.lat!=null) out.push({nom:r.name||(mod.ar+' (بلا اسم)'),lat:r.lat,lon:r.lon,hours:null,phone:null,osm:true,dishes:[],picked:{}}); }); }catch(e){}
-    for(var i=0;i<radii.length&&!out.length;i++){
+    for(var i=0;i<radii.length&&!out.length&&!fast;i++){
       var els=[]; try{ els=await alaFetch('[out:json][timeout:25];nwr'+f+'(around:'+radii[i]+','+lat+','+lon+');out center tags 60;'); }catch(e){ els=[]; }
       els.forEach(function(e){
         var t=e.tags||{}, la=e.lat!=null?e.lat:(e.center&&e.center.lat), lo=e.lon!=null?e.lon:(e.center&&e.center.lon);
@@ -4444,7 +4451,7 @@ if('serviceWorker' in navigator){
     return res.slice(0,4);
   }
   async function candidatesFor(mod,a,keys,bud,opts){
-    var osmP=osmNear(mod,a[0],a[1]), osm=[], cands=[]; osmP.catch(function(){});
+    var fast=!!(opts&&opts.fast), osmP=osmNear(mod,a[0],a[1],fast), osm=[], cands=[]; osmP.catch(function(){});
     if(mod.food){
       var zone=[]; try{ G.setC(a[0],a[1]); zone=await G.gather(G.getId(),document.createElement('div'),1500)||[]; }catch(e){ zone=[]; }
       cands=foodCands(mod,zone,(opts&&opts.keys)||(mod.food==='cafe'?CAFE_KEYS:keys),bud,a);
@@ -4456,7 +4463,7 @@ if('serviceWorker' in navigator){
       cands=cands.filter(function(c){ return c.lat!=null; });
     }
     if(!mod.food) osm=await osmP;
-    if(mod.id==='mosque'&&opts&&opts.salati){
+    if(mod.id==='mosque'&&opts&&opts.salati&&!fast){
       var sc=await salatiCands(a);
       sc.forEach(function(c){ c.d0=QT.haversine(a,[c.lat,c.lon]); });
       sc.sort(function(x,y){ return x.d0-y.d0; });
@@ -4483,13 +4490,17 @@ if('serviceWorker' in navigator){
   }
   /* مواقيت الصلاة (إن لم يردّ تطبيق صلاتي): Aladhan، طريقة تونس */
   function tmin(x){ var m=/(\d{1,2}):(\d{2})/.exec(String(x||'')); return m?(+m[1])*60+(+m[2]):null; }
+  function prayKey(a){ var d=new Date(); return 'fh_pray_'+d.getFullYear()+'-'+d.getMonth()+'-'+d.getDate()+'_'+a[0].toFixed(1)+'_'+a[1].toFixed(1); }
+  function prayerCache(a){ try{ var v=JSON.parse(localStorage.getItem(prayKey(a))||'null'); return Array.isArray(v)&&v.length===5?v:null; }catch(e){ return null; } }
   async function prayerTimes(a){
     var d=new Date(), ds=('0'+d.getDate()).slice(-2)+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+d.getFullYear(), ctl=new AbortController(), tm=setTimeout(function(){ ctl.abort(); },8000);
     try{
       var r=await fetch('https://api.aladhan.com/v1/timings/'+ds+'?latitude='+a[0]+'&longitude='+a[1]+'&method=18',{signal:ctl.signal}); clearTimeout(tm);
       var j=await r.json(), t=j&&j.data&&j.data.timings; if(!t) return null;
       var arr=['Fajr','Dhuhr','Asr','Maghrib','Isha'].map(function(k){ return tmin(t[k]); });
-      return arr.some(function(x){ return x==null; })?null:arr;
+      if(arr.some(function(x){ return x==null; })) return null;
+      try{ localStorage.setItem(prayKey(a),JSON.stringify(arr)); }catch(e){}
+      return arr;
     }catch(e){ clearTimeout(tm); return null; }
   }
   var PN=['الفجر','الظهر','العصر','المغرب','العشاء'];
@@ -4547,21 +4558,41 @@ if('serviceWorker' in navigator){
         cur=pts[0].time!=null?pts[0].time:nowMin(); var c1=stCoord(pts[0].label); if(c1) anchor={pt:c1,label:pts[0].label};
       }
       if(!anchor||!anchor.pt){
-        var me=await myPos(); if(my!==buildSeq) return; var tm=/(\d{1,2})\s*[:h]\s*(\d{2})?/i.exec(text);
-        anchor={pt:[me.lat,me.lon],label:me.label,me:true};
+        var me=await myPos(true); if(my!==buildSeq) return; var tm=/(\d{1,2})\s*[:h]\s*(\d{2})?/i.exec(text);
+        anchor={pt:[me.lat,me.lon],label:me.label,me:true,approx:!!me.approx};
         if(cur==null) cur=opts.start!=null?opts.start:(tm?(+tm[1])*60+(+(tm[2]||0)):nowMin());
       }
       var keys=G.keys(text), steps=[];
       for(var k=0;k<ids.length;k++){
         if(my!==buildSeq) return; var mod=modOf(ids[k]); out.innerHTML='<div class="prgR">⏳ فرحوم يبحث عن '+esc(mod.ar)+' ('+(k+1)+'/'+ids.length+')…</div>';
-        var cands=await candidatesFor(mod,anchor.pt,keys,bud,opts); if(my!==buildSeq) return;
+        var cands=await candidatesFor(mod,anchor.pt,keys,bud,fhOpt(opts,true)); if(my!==buildSeq) return;
         steps.push({mod:mod,cands:cands,sel:0,all:false});
       }
-      prog={legs:legs,routeRows:routeRows,anchor:anchor,start:cur,dayOff:dayOff,steps:steps,bud:bud,text:text,kind:opts.kind||'program',meal:opts.meal||null,intro:opts.intro||null};
-      if(opts.prayer) prog.pray=await prayerTimes(anchor.pt); if(my!==buildSeq) return;
-      autoSelect(); retime(); render(true); if(window.__askNext){ window.__askNext=false; if(ids.some(function(x){ return ['pharm','hosp','dent','vet','optic'].indexOf(x)>=0; })) speak([['إن شاء الله لاباس','ar-SA']],true); askMap(); }
+      prog={legs:legs,routeRows:routeRows,anchor:anchor,start:cur,dayOff:dayOff,steps:steps,bud:bud,text:text,kind:opts.kind||'program',meal:opts.meal||null,intro:opts.intro||null,loading:true};
+      if(opts.prayer) prog.pray=prayerCache(anchor.pt);
+      var hadAny=steps.some(function(s){ return s.cands.length; });
+      autoSelect(); retime(); render(true); fhRefine(my,ids,keys,bud,opts,anchor,hadAny); if(window.__askNext){ window.__askNext=false; if(ids.some(function(x){ return ['pharm','hosp','dent','vet','optic'].indexOf(x)>=0; })) speak([['إن شاء الله لاباس','ar-SA']],true); askMap(); }
     }catch(e){ if(my!==buildSeq) return; out.innerHTML='<div class="prgE">'+esc(e&&e.message||e)+'</div>'; panel.classList.add('fhList'); panel.style.display='block'; bubble('وقعت مشكلة'); }
     if(my===buildSeq){ busy=false; $('fhGo').disabled=false; }
+  }
+  /* ====== réponse immédiate (ce qu'il a déjà) puis correction quand GPS / Overpass / Salati / horaires de prière ont répondu ====== */
+  function fhOpt(o,f){ var r={}; for(var k in o) r[k]=o[k]; r.fast=f; return r; }
+  function fhSig(st){ return st.map(function(s){ return s.cands.map(function(c){ return c.nom+(c.mw?'#m':'')+(c.hours?'#h':'')+'#'+c.dishes.length; }).join('|'); }).join('//'); }
+  async function fhRefine(my,ids,keys,bud,opts,anchor0,hadAny){
+    try{
+      var anchor=anchor0;
+      if(anchor0.me&&anchor0.approx){
+        var me2=await myPos(false); if(my!==buildSeq) return;
+        if(me2&&me2.label==='موقعك'&&QT.haversine(anchor0.pt,[me2.lat,me2.lon])>150) anchor={pt:[me2.lat,me2.lon],label:me2.label,me:true};
+      }
+      var steps=[];
+      for(var k=0;k<ids.length;k++){ var mod=modOf(ids[k]); var cands=await candidatesFor(mod,anchor.pt,keys,bud,fhOpt(opts,false)); if(my!==buildSeq) return; steps.push({mod:mod,cands:cands,sel:0,all:false}); }
+      var pray=opts.prayer?await prayerTimes(anchor.pt):null; if(my!==buildSeq) return;
+      var changed=anchor!==anchor0||fhSig(steps)!==fhSig(prog.steps)||(pray&&JSON.stringify(pray)!==JSON.stringify(prog.pray));
+      prog.loading=false;
+      if(changed){ prog.anchor=anchor; prog.steps=steps; if(pray) prog.pray=pray; autoSelect(); retime(); render(!hadAny); }
+      else if(prog.steps.some(function(s){ return !s.cands.length; })) render(false);
+    }catch(e){ if(my===buildSeq&&prog){ prog.loading=false; try{ render(false); }catch(x){} } }
   }
   function dayIdx(extra){ var d=new Date(Date.now()+((prog?prog.dayOff:0)+(extra||0))*86400000); return (d.getDay()+6)%7; }
   /* اختيار أحسن مكان لكل نشاط: مفتوح (أو مجهول) ثم الأقرب */
@@ -4606,7 +4637,7 @@ if('serviceWorker' in navigator){
     prog.steps.forEach(function(s,i){
       var c=s.cands[s.sel], lab=(prog.meal&&s.mod.food)?prog.meal:s.mod.ar;
       h+='<div class="fhS"><div class="fhH"><b>'+(i+1)+'. '+s.mod.e+' '+esc(lab)+'</b>'+(c?' <span class="fhT">🕘 '+hh(s.t0)+(s.mod.dur?' ➤ '+hh(s.t1):'')+'</span>':'')+'</div>';
-      if(!c){ h+='<div class="prgE">ما لقيت '+esc(s.mod.ar)+' قريبة من هذه المنطقة.</div></div>'; return; }
+      if(!c){ h+=(prog.loading?'<div class="prgR">⏳ يكمل فرحوم البحث عن '+esc(s.mod.ar)+'…</div>':'<div class="prgE">ما لقيت '+esc(s.mod.ar)+' قريبة من هذه المنطقة.</div>')+'</div>'; return; }
       h+='<div class="fhCh">'+s.cands.map(function(x,j){ return '<button class="fhCb'+(j===s.sel?' on':'')+'" data-s="'+i+'" data-c="'+j+'">'+(x.dishes.length?'📖 ':'')+esc(x.nom)+'</button>'; }).join('')+'</div>';
       var st=s.open===true?'<span class="fhOk">✅ مفتوح</span>':s.open===false?'<span class="fhNo">⛔ مغلق في هذا الوقت</span>':'<span class="fhUn">الساعات غير متوفرة</span>';
       h+='<div class="fhD">'+G.gps(c.lat,c.lon,c.nom,'')+'<b>'+esc(c.nom)+'</b> · '+fmtD(s.dist)+(s.walk?' · 🚶 '+s.walk+' د':'')+'<br>🕒 '+(c.hours?esc(c.hours):'—')+' '+st+(c.phone?'<br>📞 '+esc(c.phone):'')+(c.lien&&c.ville?'<br>'+G.menuLnk(c.lien,c.ville,c.nom):'')+'</div>';
