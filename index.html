@@ -1262,7 +1262,119 @@ const DISH_SYN = [
 ];
 const dishNorm = x => String(x||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();
 const DISH_RE = new RegExp(DISH_SYN.map(s=>s[0].map(w=>w.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")).join("|")).join("|"),"i");
+/* ===== Détecteur caméra (couche audio séparée) ===== */
+const CAM_GAP = 2000;                       // annonce toutes les 2 secondes
+const CAM_NAMES = {person:["personne","personnes","شخص","أشخاص"],bicycle:["vélo","vélos","دراجة","دراجات"],car:["voiture","voitures","سيارة","سيارات"],motorcycle:["moto","motos","دراجة نارية","دراجات نارية"],bus:["bus","bus","حافلة","حافلات"],truck:["camion","camions","شاحنة","شاحنات"],train:["train","trains","قطار","قطارات"],boat:["bateau","bateaux","قارب","قوارب"],"traffic light":["feu","feux","إشارة مرور","إشارات مرور"],"fire hydrant":["bouche d'incendie","bouches d'incendie","صنبور حريق","صنابير حريق"],"stop sign":["panneau stop","panneaux stop","علامة قف","علامات قف"],bench:["banc","bancs","مقعد","مقاعد"],bird:["oiseau","oiseaux","طائر","طيور"],cat:["chat","chats","قطة","قطط"],dog:["chien","chiens","كلب","كلاب"],horse:["cheval","chevaux","حصان","خيول"],sheep:["mouton","moutons","خروف","خراف"],cow:["vache","vaches","بقرة","أبقار"],backpack:["sac à dos","sacs à dos","حقيبة ظهر","حقائب ظهر"],umbrella:["parapluie","parapluies","مظلة","مظلات"],handbag:["sac à main","sacs à main","حقيبة يد","حقائب يد"],suitcase:["valise","valises","حقيبة سفر","حقائب سفر"],bottle:["bouteille","bouteilles","زجاجة","زجاجات"],cup:["tasse","tasses","كوب","أكواب"],fork:["fourchette","fourchettes","شوكة","شوك"],knife:["couteau","couteaux","سكين","سكاكين"],spoon:["cuillère","cuillères","ملعقة","ملاعق"],bowl:["bol","bols","وعاء","أوعية"],chair:["chaise","chaises","كرسي","كراسي"],couch:["canapé","canapés","أريكة","أرائك"],"potted plant":["plante","plantes","نبتة","نباتات"],bed:["lit","lits","سرير","أسرّة"],"dining table":["table","tables","طاولة","طاولات"],toilet:["toilettes","toilettes","مرحاض","مراحيض"],tv:["télévision","télévisions","تلفاز","تلفازات"],laptop:["ordinateur portable","ordinateurs portables","حاسوب محمول","حواسيب محمولة"],mouse:["souris","souris","فأرة","فأرات"],remote:["télécommande","télécommandes","جهاز تحكم","أجهزة تحكم"],keyboard:["clavier","claviers","لوحة مفاتيح","لوحات مفاتيح"],"cell phone":["téléphone","téléphones","هاتف","هواتف"],microwave:["micro-ondes","micro-ondes","ميكروويف","ميكروويفات"],oven:["four","fours","فرن","أفران"],refrigerator:["réfrigérateur","réfrigérateurs","ثلاجة","ثلاجات"],book:["livre","livres","كتاب","كتب"],clock:["horloge","horloges","ساعة","ساعات"],vase:["vase","vases","مزهرية","مزهريات"],scissors:["ciseaux","ciseaux","مقص","مقصات"],"teddy bear":["peluche","peluches","دمية","دمى"]};
+let camOn=false, camStream=null, camVideo=null, camModel=null, camTimer=null, camLastSig="", camLastSpoken=0, camAudio=null, camAudioBusy=false, camToken=0;
+
+function camLoadScript(src){
+  return new Promise((res,rej)=>{
+    if([...document.scripts].some(s=>s.src===src)) return res();
+    const s=document.createElement("script"); s.src=src; s.onload=res; s.onerror=()=>rej(new Error("load "+src)); document.head.appendChild(s);
+  });
+}
+async function camLoadModel(){
+  if(camModel) return camModel;
+  if(!window.tf) await camLoadScript("https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js");
+  if(!window.cocoSsd) await camLoadScript("https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js");
+  camModel = await cocoSsd.load();
+  return camModel;
+}
+function camPhrase(preds, w){
+  const ar = L==="ar", g={};
+  for(const p of preds){
+    const k=p.class, cx=(p.bbox[0]+p.bbox[2]/2)/w, area=p.bbox[2]*p.bbox[3];
+    const o=g[k]||(g[k]={n:0,a:0,x:0.5}); o.n++; if(area>o.a){o.a=area;o.x=cx;}
+  }
+  const parts=Object.keys(g).sort().map(k=>{
+    const nm=CAM_NAMES[k]||[k,k,k,k], o=g[k];
+    const pos = o.x<0.35 ? (ar?"على اليسار":"à gauche") : o.x>0.65 ? (ar?"على اليمين":"à droite") : (ar?"أمامك":"devant");
+    const name = ar ? nm[o.n>1?3:2] : nm[o.n>1?1:0];
+    return ar ? (o.n>1 ? o.n+" "+name : name)+" "+pos : (o.n>1 ? o.n+" "+name : "1 "+name)+" "+pos;
+  });
+  return parts.join(ar?"، ":", ");
+}
+function camSay(text){
+  if(!text) return;
+  const lang = L==="ar" ? "ar" : "fr";
+  let done=false, wd=null;
+  const fin=()=>{ done=true; clearTimeout(wd); camAudioBusy=false; };
+  const fallback=(retry)=>{ if(done && retry!==true) return; fin(); try{
+    const u=new SpeechSynthesisUtterance(text); u.lang = lang==="ar"?"ar-SA":"fr-FR";
+    const vs=speechSynthesis.getVoices().filter(v=>v.lang.replace("_","-").startsWith(lang));
+    if(vs.length>1) u.voice=vs[vs.length-1];          // autre voix que celle de Farhoum (la 1re de la langue)
+    u.pitch=1.5; u.rate=1.1;                            // timbre différent de Farhoum
+    if(retry!==true) u.onerror=(ev)=>{ if(camOn && ev && /cancel|interrupt/.test(ev.error||"")) setTimeout(()=>fallback(true),1500); };
+    speechSynthesis.speak(u);
+  }catch(e){} };
+  try{
+    if(!camAudio){ camAudio=new Audio(); camAudio.preload="auto"; }
+    camAudioBusy=true;
+    camAudio.onplaying=()=>{ clearTimeout(wd); wd=setTimeout(fin,15000); };
+    camAudio.onended=fin;
+    camAudio.onerror=()=>fallback();
+    wd=setTimeout(fallback,3000);              // pas de lecture en 3 s -> voix du navigateur (sans couper l'autre)
+    camAudio.src="https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl="+lang+"&q="+encodeURIComponent(text);
+    const pr=camAudio.play();
+    if(pr && pr.catch) pr.catch(()=>fallback());
+  }catch(e){ fallback(); }
+}
+async function camLoop(tok){
+  if(!camOn || tok!==camToken) return;
+  try{
+    if(camVideo.readyState>=2 && camVideo.videoWidth){
+      const preds=(await camModel.detect(camVideo,20)).filter(p=>p.score>=0.55);
+      const sig=preds.map(p=>p.class).sort().join("|");
+      const now=Date.now();
+      if(preds.length && sig!==camLastSig && now-camLastSpoken>=CAM_GAP && !camAudioBusy){
+        camLastSig=sig; camLastSpoken=now;
+        const t=camPhrase(preds,camVideo.videoWidth);
+        status("📷 "+t);
+        camSay(t);
+      } else if(!preds.length){ camLastSig=""; }
+    }
+  }catch(e){}
+  if(camOn && tok===camToken) camTimer=setTimeout(()=>camLoop(tok),400);
+}
+async function camStart(){
+  if(camOn) return;
+  camOn=true; const tok=++camToken;
+  speak(L==="ar" ? "تشغيل الكاميرا" : "Caméra activée");
+  try{
+    camStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"},audio:false});
+    if(!camOn || tok!==camToken){ camStream.getTracks().forEach(t=>t.stop()); return; }
+    if(!camVideo){
+      camVideo=document.createElement("video");
+      camVideo.muted=true; camVideo.setAttribute("playsinline",""); camVideo.setAttribute("aria-hidden","true");
+      camVideo.style.cssText="position:fixed;left:-9999px;top:0;width:2px;height:2px;opacity:0;pointer-events:none";
+      document.body.appendChild(camVideo);
+    }
+    camVideo.srcObject=camStream; await camVideo.play();
+    await camLoadModel();
+    if(!camOn || tok!==camToken) return;
+    camLastSig=""; camLastSpoken=0;
+    camLoop(tok);
+  }catch(e){
+    camStop(true);
+    speak(L==="ar" ? "تعذر تشغيل الكاميرا" : "Impossible d'activer la caméra");
+  }
+}
+function camStop(silent){
+  const was=camOn;
+  camOn=false; camToken++; clearTimeout(camTimer);
+  if(camStream){ camStream.getTracks().forEach(t=>t.stop()); camStream=null; }
+  if(camVideo) camVideo.srcObject=null;
+  if(camAudio){ try{ camAudio.pause(); }catch(e){} }
+  camAudioBusy=false; camLastSig="";
+  if(was && !silent) speak(L==="ar" ? "إيقاف الكاميرا" : "Caméra arrêtée");
+}
+const CAM_WORD = "cam[eé]ra|caméra|كاميرا|الكاميرا|كمرا|الكمرا";
+const CAM_STOPW = "stop|stoppe|stopper|arr[êe]te|arr[êe]ter|ferme|fermer|[ée]teins|off|أوقف|اوقف|إيقاف|ايقاف|وقف|أغلق|اغلق|سكر|توقف|ستوب";
+const CAM_STOP_RE = new RegExp("(?:"+CAM_STOPW+")[^\\n]{0,20}(?:"+CAM_WORD+")|(?:"+CAM_WORD+")[^\\n]{0,20}(?:"+CAM_STOPW+")","i");
+const CAM_START_RE = new RegExp(CAM_WORD,"i");
 const CMD = [
+  [CAM_STOP_RE, ()=>camStop()],
+  [CAM_START_RE, ()=>camStart()],
   [DISH_RE, (t)=>askDish(t)],
   [/adresse|quelle rue|quel quartier|dans quelle ville|عنوان|أي شارع|اي شارع|أي حي|اي حي/i, async ()=>{ try{ const p = await getPos(); const t = await addressText(p.coords.latitude,p.coords.longitude); lastText = t || S().noData; $("out").textContent = lastText; speak(lastText); }catch(e){ speak(e && e.code ? gpsMsg(e) : S().noData); } }],
   [/(ferme|fermer|quitte|enl[èe]ve).*(carte|map)|(أغلق|اغلق|سكر|إغلاق).*(الخريطة|الخارطة|خريطة)/i, ()=>hideMap()],
