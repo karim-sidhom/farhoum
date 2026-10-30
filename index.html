@@ -1305,12 +1305,14 @@ function camSay(text){
     if(vs.length>1) u.voice=vs[vs.length-1];          // autre voix que celle de Farhoum (la 1re de la langue)
     u.pitch=1.5; u.rate=1.1;                            // timbre différent de Farhoum
     if(retry!==true) u.onerror=(ev)=>{ if(camOn && ev && /cancel|interrupt/.test(ev.error||"")) setTimeout(()=>fallback(true),1500); };
+    status("🗣 voix navigateur (couche audio indisponible)");
     speechSynthesis.speak(u);
   }catch(e){} };
   try{
     if(!camAudio){ camAudio=new Audio(); camAudio.preload="auto"; }
     camAudioBusy=true;
-    camAudio.onplaying=()=>{ clearTimeout(wd); wd=setTimeout(fin,15000); };
+    camAudio.onplaying=()=>{ clearTimeout(wd); wd=setTimeout(fin,15000); status("🔊 couche audio séparée"); };
+    camAudio.onpause=()=>{ if(!done && !camAudio.ended && camOn){ setTimeout(()=>{ if(!done && camAudio.paused){ const q=camAudio.play(); if(q&&q.catch) q.catch(()=>{}); } },150); } };   // reprise si le système met la lecture en pause quand Farhoum parle
     camAudio.onended=fin;
     camAudio.onerror=()=>fallback();
     wd=setTimeout(fallback,3000);              // pas de lecture en 3 s -> voix du navigateur (sans couper l'autre)
@@ -1368,8 +1370,8 @@ function camStop(silent){
   camAudioBusy=false; camLastSig="";
   if(was && !silent) speak(L==="ar" ? "إيقاف الكاميرا" : "Caméra arrêtée");
 }
-const CAM_WORD = "cam[eé]ra|caméra|كاميرا|الكاميرا|كمرا|الكمرا";
-const CAM_STOPW = "stop|stoppe|stopper|arr[êe]te|arr[êe]ter|ferme|fermer|[ée]teins|off|أوقف|اوقف|إيقاف|ايقاف|وقف|أغلق|اغلق|سكر|توقف|ستوب";
+const CAM_WORD = "[ck]a?m[eéèi]?[rh]a|[ck]am[eéèi]ra|[كق]ا?م[يىئ]?ر[اةه]|[كق]ا?م[يىئ]?ره";
+const CAM_STOPW = "stop|stoppe|stopper|arr[êe]te|arr[êe]ter|arr[êe]t|ferme|fermer|[ée]teins|[ée]teindre|off|close|turn off|أوقف|اوقف|أوقفي|اوقفي|إيقاف|ايقاف|وقف|وقفي|أغلق|اغلق|أقفل|اقفل|سكر|سكّر|توقف|قف|ستوب|ستب|استوب|إستوب|ستوبي|طفي|اطفي|أطفئ|اطفئ|إلغاء|الغاء";
 const CAM_STOP_RE = new RegExp("(?:"+CAM_STOPW+")[^\\n]{0,20}(?:"+CAM_WORD+")|(?:"+CAM_WORD+")[^\\n]{0,20}(?:"+CAM_STOPW+")","i");
 const CAM_START_RE = new RegExp(CAM_WORD,"i");
 const CMD = [
