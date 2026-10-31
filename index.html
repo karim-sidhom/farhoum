@@ -1397,7 +1397,7 @@ const CF_W = "https://carrefour.lordsidhom78.workers.dev";
 const GT_W = "https://geant.lordsidhom78.workers.dev";
 let cfWait = 0, cfShop = null;
 const CF_RE = /carrefour|\bcar+e?\s?f[oau]u?r?t?\b|كا?ر+\s?فو?ر?/i;
-const GT_RE = /g[ée]+\s?an+t?\b|\bj[ée]?\s?an+t?\b|\bd?j[ée]?an\b|gi[ae]nt|جيان|جيون|جيانت|جايان/i;
+const GT_RE = /g[ée]+\s?an+t?[ea]?\b|\bj[ée]?\s?an+t?[ea]?\b|\bd?j[ée]?an[ea]?\b|gi[ae]nt[ea]?\b|جيان|جيون|جيانت|جايان/i;
 const CF_NEAR_WORDS = "proche|pr[èe]s|loin|o[ùu]|adresse|magasin|أقرب|قريب|أين|وين";
 const mkNear = re => new RegExp("(?:"+re.source+").*(?:"+CF_NEAR_WORDS+")|(?:"+CF_NEAR_WORDS+").*(?:"+re.source+")","i");
 const CF_NEAR_RE = mkNear(CF_RE), GT_NEAR_RE = mkNear(GT_RE);
