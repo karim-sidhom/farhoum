@@ -1519,7 +1519,7 @@ const T = {
     fmt:(c,d,w)=>`${c}, à ${d}, ${w}.`,
     walkOn:"Mode marche activé. Je vous préviens quand vous avancez.",walkOff:"Mode marche désactivé.",
     greet:"Bonjour, je suis Farhoum, votre ami. Je suis là pour vous accompagner dans presque toutes les tâches de la vie.",
-    intro:"Je vous dis où vous êtes et ce qui est autour de vous, je vous préviens en marchant, je signale les trains, les monuments, les restaurants et les magasins, je vous donne la météo et l'heure, et je joue la radio. Parlez-moi, ou touchez l'écran.",
+    intro:"Je vous dis où vous êtes et ce qui est autour de vous, je vous préviens en marchant, je signale les trains, les monuments, les restaurants et les magasins, je vous donne la météo et l'heure, et je joue la radio et le Coran. Je peux aussi appeler les supermarchés Carrefour et Géant, et vous donner des informations générales. Parlez-moi, ou touchez l'écran.",
     gpsDenied:"L'accès à la position est refusé pour ce site. Dans Chrome, touchez le cadenas à côté de l'adresse, puis Autorisations, et autorisez la position. Rechargez ensuite la page.",
     gpsHttps:"Cette page doit être ouverte en HTTPS pour utiliser la position.",
     gpsSlow:"Le téléphone n'arrive pas à trouver le signal. Sortez à l'extérieur ou près d'une fenêtre, puis touchez de nouveau l'écran.",
@@ -1571,7 +1571,7 @@ const T = {
     fmt:(c,d,w)=>`${c}، على بعد ${d}، ${w}.`,
     walkOn:"تم تفعيل وضع المشي. سأنبّهك عندما تتحرك.",walkOff:"تم إيقاف وضع المشي.",
     greet:"مرحباً، أنا فرحوم، صديقك. أنا هنا لأرافقك في تقريباً كل مهام الحياة.",
-    intro:"أخبرك أين أنت وما حولك، وأنبّهك أثناء المشي، وأدلّك على القطارات والمعالم والمطاعم والمتاجر، وأعطيك الطقس والوقت، وأشغّل الإذاعة. تكلّم معي أو المس الشاشة.",
+    intro:"أخبرك أين أنت وما حولك، وأنبّهك أثناء المشي، وأدلّك على القطارات والمعالم والمطاعم والمتاجر، وأعطيك الطقس والوقت، وأشغّل الإذاعة والقرآن الكريم. ويمكنني أيضاً الاتصال بالمتاجر الكبرى كارفور وجيان، وإعطاءك معلومات عامة. تكلّم معي أو المس الشاشة.",
     gpsDenied:"تم رفض الوصول إلى الموقع لهذا الموقع. في كروم المس القفل بجانب العنوان ثم الأذونات واسمح بالموقع. ثم أعد تحميل الصفحة.",
     gpsHttps:"يجب فتح هذه الصفحة عبر HTTPS لاستعمال الموقع.",
     gpsSlow:"الهاتف لا يجد الإشارة. اخرج إلى الخارج أو اقترب من نافذة، ثم المس الشاشة من جديد.",
@@ -1994,14 +1994,13 @@ const CMD = [
   [/français|francais|فرنسي|بالفرنسية/, ()=>{ if(L!=="fr") $("lang").click(); else speak(S().title); }],
   [/aide|help|مساعدة|ساعدني/, ()=>speak(S().help)],
   [WK_Q_RE, (t)=>{ if(radioOpen || (stAudio && !stAudio.paused)) return; askEncyclopedia(t); }],
-  /* en dernier : tout ce qui n'est pas une autre commande, « lait » ou « je veux du lait », = prix chez Carrefour */
+  /* en dernier : tout ce qui n'est pas une autre commande ; Carrefour n'est plus appelé ici */
   [/\S/, (t)=>{
     const pre = /^\s*(?:je veux|je voudrais|j'ai besoin d[eu']?|acheter|أريد|اريد|أبغى|نحب)\s+/i;
     if((radioOpen || (stAudio && !stAudio.paused)) && !pre.test(t)) return;   // musique en cours : le micro entend les paroles, elles ne doivent pas lancer de recherche
     const q = cfTerm(t.replace(pre,""));
     if(q && q.split(" ").length>3){ askEncyclopedia(t); return; }   // longue phrase = question : réponse de Wikipédia (comme Aladin)
-    if(!q || q.length<3 || q.split(" ").length>3 || /^(?:bonjour|salut|merci|oui|non|ok|d'accord|bonsoir|allo|allô|نعم|لا|شكرا|مرحبا|السلام عليكم|اه)$/i.test(q)) return;
-    carrefourSearch(q);
+    return;   // Carrefour / Géant ne sont appelés que si on les nomme (CF_RE / GT_RE plus haut)
   }]
 ];
 function command(t){
@@ -3444,7 +3443,7 @@ window.RADIO_HTML = "<!DOCTYPE html>\n<html lang=\"ar\" dir=\"rtl\">\n<head>\n  
     lampWrap.classList.add('rub'); rubSound(true,0.45);
     autoTimer=setInterval(function(){
       var s=spout(), i;
-      setCharge(charge+1.5);
+      setCharge(charge+4.6);
       if(revealed) return;                      /* le génie est sorti : plus de frottement ni de bruit */
       for(i=0;i<2;i++) addSmoke(s.x+(Math.random()*30-15), s.y,'smoke',0.6+Math.random()*0.4,1);
       if(Math.random()<0.3) addSmoke(s.x+(Math.random()*20-10), s.y,'gold',0.4,1);
