@@ -2220,6 +2220,7 @@ function gpsAccept(p){
   if(!gpsFix || p.coords.accuracy <= gpsFix.coords.accuracy || Date.now()-gpsFix.timestamp > 10000) gpsFix = p;
   status(`GPS ±${Math.round(gpsFix.coords.accuracy)} m`);
   gpsWaiters.splice(0).forEach(w=>w.res(gpsFix));
+  maOnPos(p);
 }
 function gpsFail(e){
   status("GPS erreur "+e.code+" : "+(e.message||""));
@@ -2242,6 +2243,170 @@ function getPos(){
     setTimeout(()=>{ if(gpsFix && Date.now()-gpsFix.timestamp < 300000){ const i = gpsWaiters.indexOf(w); if(i>=0){ gpsWaiters.splice(i,1); w.res(gpsFix); } } },3000);
   });
 }
+
+/* ---------- Maalimi intégré (invisible) : même source que معالمي (Overpass historic/tourism + Wikipedia), aucune interface ----------
+   1) à la présentation (premier toucher) : liste des monuments les plus proches
+   2) en marchant : quand on s'approche d'un monument, Farhoum le annonce puis lit sa fiche Wikipedia */
+const MA_NEAR_M = 150;                 // distance de déclenchement de l'annonce
+const MA_REARM_M = 400;                // un monument annoncé peut l'être de nouveau après s'en être éloigné de cette distance
+const MA_RADII = [1000,5000,10000,20000,60000,120000,250000];   // mêmes rayons que معالمي
+const MA_TARGET = 3;                   // on élargit le rayon jusqu'à trouver au moins 3 monuments (comme معالمي)
+const MA_EP = ["https://overpass-api.de/api/interpreter","https://overpass.kumi.systems/api/interpreter","https://maps.mail.ru/osm/tools/overpass/api/interpreter"];
+const MA_TXT = {
+  fr:{head:"Monuments à proximité.",near:"Vous êtes près d'un monument.",
+      type:{ruins:"site archéologique",monument:"monument",castle:"château ou fort",attraction:"site touristique"},
+      km:k=>`${k} kilomètres`},
+  ar:{head:"المعالم القريبة منك.",near:"أنت قرب معلم.",
+      type:{ruins:"موقع أثري",monument:"نُصُب تذكاري",castle:"قلعة",attraction:"معلم سياحي"},
+      km:k=>`${k} كيلومتر`}
+};
+let maItems = [], maLang = null, maCenter = null, maR = 0, maLoading = null, maLastTry = 0, maSpoken = {}, maBusy = false, maWiki = {};
+
+function maCat(t){
+  const h = t.historic||"";
+  if(h==="ruins"||h==="archaeological_site") return "ruins";
+  if(h==="monument"||h==="memorial") return "monument";
+  if(h==="castle"||h==="fort"||h==="fortress"||h==="city_gate"||h==="city_walls"||h==="tower") return "castle";
+  return "attraction";
+}
+function maQuery(lat,lon,r){
+  const a = `(around:${r},${lat},${lon})`;
+  return "[out:json][timeout:25];("+
+    ["monument","memorial","castle","fort","city_gate","city_walls","tower","ruins","archaeological_site"].map(h=>`nwr["historic"="${h}"]${a};`).join("")+
+    `nwr["tourism"="attraction"]${a};`+");out center;";
+}
+async function maOverpass(q){
+  for(const ep of MA_EP){
+    const ctl = new AbortController(), tm = setTimeout(()=>ctl.abort(),30000);
+    try{
+      const r = await fetch(ep,{method:"POST",body:"data="+encodeURIComponent(q),signal:ctl.signal});
+      clearTimeout(tm);
+      if(!r.ok) continue;
+      const j = await r.json();
+      if(j && j.elements) return j.elements;
+    }catch(_){ clearTimeout(tm); }
+  }
+  throw new Error("overpass");
+}
+function maParse(els){
+  const seen = new Set();
+  return els.map(e=>{
+    const la = e.lat ?? (e.center && e.center.lat), lo = e.lon ?? (e.center && e.center.lon);
+    if(la==null || lo==null) return null;
+    const t = e.tags||{};
+    const name = L==="ar" ? (t["name:ar"]||t.name||"") : (t["name:fr"]||t["name:en"]||t.name||t["name:ar"]||"");
+    if(!name) return null;                                   // sans nom : rien à annoncer
+    return {id:e.type+e.id, name, type:maCat(t), lat:la, lon:lo, wikipedia:t.wikipedia||"", wikidata:t.wikidata||""};
+  }).filter(Boolean).filter(s=>{
+    const k = s.name+"@"+Math.round(s.lat*1e4)+","+Math.round(s.lon*1e4);
+    if(seen.has(k)) return false; seen.add(k); return true;
+  });
+}
+/* charge les monuments autour de (lat,lon) : part de 1 km et élargit jusqu'à en trouver MA_TARGET */
+function maLoad(lat,lon){
+  if(maLoading) return maLoading;
+  maLastTry = Date.now();
+  maLoading = (async()=>{
+    try{
+      let items = [], r = 0;
+      for(let i=0;i<MA_RADII.length;i++){
+        r = MA_RADII[i];
+        items = maParse(await maOverpass(maQuery(lat,lon,r)));
+        if(items.length>=MA_TARGET) break;
+      }
+      maItems = items; maCenter = {lat,lon}; maR = r; maLang = L;
+    }catch(_){}
+    finally{ maLoading = null; }
+    return maItems;
+  })();
+  return maLoading;
+}
+/* données valables si on est resté dans la moitié du rayon chargé */
+const maValid = (lat,lon) => maCenter && maLang===L && dist(lat,lon,maCenter.lat,maCenter.lon) <= maR*0.5;
+async function maEnsure(lat,lon){
+  if(maValid(lat,lon)) return maItems;
+  return maLoad(lat,lon);
+}
+function maDist(m){
+  return m<1000 ? S().m(roundDist(m)) : MA_TXT[L].km((m/1000).toFixed(m<10000?1:0).replace(/\.0$/,""));
+}
+function maLabel(s){ return s.name+(L==="ar"?"، ":", ")+MA_TXT[L].type[s.type]; }
+function maFmt(lat,lon,s){
+  return S().fmt(maLabel(s), maDist(s.d), where(bearing(lat,lon,s.lat,s.lon)));
+}
+function maSorted(lat,lon){
+  return maItems.map(s=>({...s,d:dist(lat,lon,s.lat,s.lon)})).sort((a,b)=>a.d-b.d);
+}
+/* 1) présentation : liste des monuments les plus proches */
+async function maList(lat,lon){
+  await maEnsure(lat,lon);
+  const list = maSorted(lat,lon).slice(0,7);
+  if(!list.length) return "";
+  return MA_TXT[L].head+" "+list.map(s=>maFmt(lat,lon,s)).join(" ");
+}
+/* fiche Wikipedia dans la langue de Farhoum (un texte dans une autre langue serait mal prononcé) */
+async function maWikiSummary(lang,title){
+  const r = await fetch("https://"+lang+".wikipedia.org/api/rest_v1/page/summary/"+encodeURIComponent(title),{headers:{Accept:"application/json"}});
+  if(!r.ok) throw new Error("wiki");
+  const j = await r.json();
+  if(j.type==="disambiguation") throw new Error("disambiguation");
+  return j;
+}
+async function maWikiGet(s){
+  const key = L+":"+(s.wikidata||s.wikipedia||s.name);
+  if(key in maWiki) return maWiki[key];
+  let data = null;
+  try{
+    const tag = /^([a-z-]+):(.+)$/.exec(s.wikipedia||"");
+    if(s.wikidata){
+      const r = await fetch("https://www.wikidata.org/wiki/Special:EntityData/"+s.wikidata+".json");
+      if(r.ok){
+        const j = await r.json(), ent = j.entities && j.entities[s.wikidata];
+        const link = ent && ent.sitelinks && ent.sitelinks[L+"wiki"];
+        if(link) data = await maWikiSummary(L,link.title);
+      }
+    }
+    if(!data && tag && tag[1]===L) data = await maWikiSummary(L,tag[2]);
+    if(!data){
+      const r = await fetch("https://"+L+".wikipedia.org/w/api.php?action=query&list=search&srsearch="+encodeURIComponent(s.name)+"&format=json&origin=*&srlimit=1");
+      if(r.ok){
+        const j = await r.json(), hit = j.query && j.query.search && j.query.search[0];
+        if(hit) data = await maWikiSummary(L,hit.title);
+      }
+    }
+  }catch(_){ data = null; }
+  maWiki[key] = data;
+  return data;
+}
+/* 2) approche d'un monument : annonce puis fiche Wikipedia (phrase par phrase, ce qui évite la coupure des longs textes) */
+async function maAnnounce(lat,lon,s){
+  maBusy = true;
+  try{
+    speak(MA_TXT[L].near+" "+maFmt(lat,lon,s), true);
+    const data = await maWikiGet(s);
+    if(data && data.extract){
+      const parts = (data.extract.match(/[^.!؟]+[.!؟]?/g)||[data.extract]).map(x=>x.trim()).filter(Boolean);
+      parts.forEach(x=>speak(x,true));
+    }
+  }catch(_){}
+  finally{ maBusy = false; }
+}
+function maOnPos(p){
+  try{
+    const lat = p.coords.latitude, lon = p.coords.longitude;
+    if(!maValid(lat,lon) && Date.now()-maLastTry>60000) maLoad(lat,lon);
+    if(!maValid(lat,lon)) return;
+    /* ré-arme les monuments dont on s'est éloigné */
+    maItems.forEach(s=>{ if(maSpoken[s.id] && dist(lat,lon,s.lat,s.lon)>MA_REARM_M) delete maSpoken[s.id]; });
+    if(!started || maBusy || busy || serviceMode || dishMode) return;
+    if(p.coords.accuracy > MA_NEAR_M) return;
+    const s = maSorted(lat,lon).find(x=>x.d<=MA_NEAR_M && !maSpoken[x.id]);
+    if(!s) return;
+    maSpoken[s.id] = Date.now();
+    maAnnounce(lat,lon,s);
+  }catch(_){}
+}
+
 function gpsMsg(e){
   if(!window.isSecureContext) return S().gpsHttps;
   if(e && e.code===1) return S().gpsDenied;
@@ -2359,7 +2524,9 @@ async function whereAmI(){
     if(heading == null && p.coords.heading != null && !isNaN(p.coords.heading)) heading = p.coords.heading;
     const first = !introDone; introDone = true;
     const svcP = fetchServices(lat,lon).catch(()=>null);
-    const [wx, pl, ad] = await Promise.all([first ? fetchWeather(lat,lon) : null, fetchPlaces(lat,lon).catch(()=>null), addressText(lat,lon)]);
+    const maP = first ? maList(lat,lon).catch(()=>"") : null;
+    const maRace = first ? Promise.race([maP, new Promise(r=>setTimeout(()=>r(null),7000))]) : null;
+    const [wx, pl, ad, maT] = await Promise.all([first ? fetchWeather(lat,lon) : null, fetchPlaces(lat,lon).catch(()=>null), addressText(lat,lon), maRace]);
     let txt = "";
     if(first){ txt += nowText()+" "; if(wx) txt += curText(wx)+" "; }
     if(ad) txt += ad+" ";
@@ -2368,10 +2535,12 @@ async function whereAmI(){
       txt += describe(lat,lon,pl.items);
     }else txt += S().noData;
     { const tt = trainText(lat,lon); if(tt) txt += " "+tt; }
+    if(first && maT) txt += " "+maT;
     if(first) txt += " "+S().help;
     const near = pl ? lastNear : [];
     mapDataPos = {lat,lon}; if(mapOpen) renderMap();
     speak(txt.trim(), first);
+    if(first && maT===null) maP.then(t=>{ if(t) speak(t,true); });   // liste des monuments arrivée en retard
     speak(S().waitMore, true);
     svcP.then(found=>{
       if(!found || svcGen!==myGen) return;
