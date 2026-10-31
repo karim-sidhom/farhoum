@@ -1120,6 +1120,7 @@ const T = {
     fmt:(c,d,w)=>`${c}, à ${d}, ${w}.`,
     walkOn:"Mode marche activé. Je vous préviens quand vous avancez.",walkOff:"Mode marche désactivé.",
     greet:"Bonjour, je suis Farhoum, votre ami. Je suis là pour vous accompagner dans presque toutes les tâches de la vie.",
+    intro:"Je vous dis où vous êtes et ce qui est autour de vous, je vous préviens en marchant, je signale les trains, les monuments, les restaurants et les magasins, je vous donne la météo et l'heure, et je joue la radio. Parlez-moi, ou touchez l'écran.",
     gpsDenied:"L'accès à la position est refusé pour ce site. Dans Chrome, touchez le cadenas à côté de l'adresse, puis Autorisations, et autorisez la position. Rechargez ensuite la page.",
     gpsHttps:"Cette page doit être ouverte en HTTPS pour utiliser la position.",
     gpsSlow:"Le téléphone n'arrive pas à trouver le signal. Sortez à l'extérieur ou près d'une fenêtre, puis touchez de nouveau l'écran.",
@@ -1171,6 +1172,7 @@ const T = {
     fmt:(c,d,w)=>`${c}، على بعد ${d}، ${w}.`,
     walkOn:"تم تفعيل وضع المشي. سأنبّهك عندما تتحرك.",walkOff:"تم إيقاف وضع المشي.",
     greet:"مرحباً، أنا فرحوم، صديقك. أنا هنا لأرافقك في تقريباً كل مهام الحياة.",
+    intro:"أخبرك أين أنت وما حولك، وأنبّهك أثناء المشي، وأدلّك على القطارات والمعالم والمطاعم والمتاجر، وأعطيك الطقس والوقت، وأشغّل الإذاعة. تكلّم معي أو المس الشاشة.",
     gpsDenied:"تم رفض الوصول إلى الموقع لهذا الموقع. في كروم المس القفل بجانب العنوان ثم الأذونات واسمح بالموقع. ثم أعد تحميل الصفحة.",
     gpsHttps:"يجب فتح هذه الصفحة عبر HTTPS لاستعمال الموقع.",
     gpsSlow:"الهاتف لا يجد الإشارة. اخرج إلى الخارج أو اقترب من نافذة، ثم المس الشاشة من جديد.",
@@ -2634,7 +2636,7 @@ function waitSpeech(){
   });
 }
 async function askPermissions(){
-  speak(S().greet+" "+S().perm);
+  speak(S().greet+" "+S().intro+" "+S().perm);
   const compassP = startCompass();            // boussole (iPhone : demande immédiate, dans le geste du toucher)
   /* demandes explicites, tout de suite après le toucher : position puis micro (sans attendre la fin du message d'accueil) */
   const sx = S(), st = {gps:false,mic:false};
