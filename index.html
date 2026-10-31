@@ -1552,12 +1552,12 @@ const T = {
     glvNoCity:"Aucune ville couverte à moins de 60 kilomètres.",glvFail:"Restaurants indisponibles.",
     glvHead:c=>`Restaurants disponibles à ${c}.`,glvMenus:"Menus.",glvMenuOf:n=>`Menu de ${n}.`,glvNoMenu:"Menu indisponible.",
     dish:(n,p)=>p!=null?`${n}, ${p} dinars. `:`${n}. `,
-    f2Search:q=>`Je cherche des ${/^[a-z]/i.test(q)&&!/[sx]$/i.test(q)?q+"s":q} près de vous.`,f2Head:q=>`Voici ce que j'ai trouvé pour ${q}.`,
+    f2Search:q=>`J'ai bien écouté, tu demandes ${frArt(q)}${q}, je cherche pour toi près d'ici.`,f2Head:q=>`Voici ce que j'ai trouvé pour ${q}.`,
     f2None:"Je n'ai rien trouvé.",f2Fail:"La recherche n'est pas disponible pour le moment.",
     f2At:(d,w)=>`à ${d}, ${w}.`,
     permGps:"Position",permMic:"Micro",permYes:"autorisé",permNo:"refusé",
     waitMore:"Patientez un peu, je vais vous fournir des données plus poussées dans quelque temps. Si vous cherchez un sandwich, les menus, la radio, touchez deux fois de suite.",
-    cfAsk:"Quel produit cherchez-vous chez Carrefour ?",cfSearch:q=>`Je cherche ${q} chez Carrefour.`,cfHead:q=>`Voici ce que j'ai trouvé pour ${q} chez Carrefour.`,
+    cfAsk:"Quel produit cherchez-vous chez Carrefour ?",cfSearch:q=>`J'ai bien écouté, tu demandes ${q}, je cherche pour toi chez Carrefour.`,cfHead:q=>`Voici ce que j'ai trouvé pour ${q} chez Carrefour.`,
     cfNone:"Je n'ai rien trouvé chez Carrefour.",cfFail:"Carrefour n'est pas disponible pour le moment.",cfOut:"Épuisé.",cfNear:"Je cherche le Carrefour le plus proche.",cfNearHead:"Le Carrefour le plus proche.",cfNearNone:"Aucun Carrefour à moins de 30 kilomètres.",
     askService:"Quel service demandez-vous ? Sandwich, menus, radio…",
     mapOpen:"Voici la carte.",mapNone:"La carte n'est pas disponible sans internet.",
@@ -1602,12 +1602,12 @@ const T = {
     glvNoCity:"لا توجد مدينة مغطاة على بعد أقل من 60 كيلومتر.",glvFail:"المطاعم غير متوفرة.",
     glvHead:c=>`المطاعم المتوفرة في ${c}.`,glvMenus:"القوائم.",glvMenuOf:n=>`قائمة ${n}.`,glvNoMenu:"القائمة غير متوفرة.",
     dish:(n,p)=>p!=null?`${n}، ${p} دينار. `:`${n}. `,
-    f2Search:q=>`أبحث عن ${q} قربك.`,f2Head:q=>`هذا ما وجدته لـ ${q}.`,
+    f2Search:q=>`سمعتك جيداً، أنت تطلب ${q}، أبحث لك عنه قربك.`,f2Head:q=>`هذا ما وجدته لـ ${q}.`,
     f2None:"لم أجد شيئاً.",f2Fail:"البحث غير متوفر حالياً.",
     f2At:(d,w)=>`على بعد ${d}، ${w}.`,
     permGps:"الموقع",permMic:"الميكروفون",permYes:"مسموح",permNo:"مرفوض",
     waitMore:"انتظر قليلاً، سأوافيك بمعطيات أدق بعد قليل. إذا كنت تبحث عن ساندويتش أو قوائم أو إذاعة، المس الشاشة مرتين متتاليتين.",
-    cfAsk:"أي منتج تبحث عنه في كارفور؟",cfSearch:q=>`أبحث عن ${q} في كارفور.`,cfHead:q=>`هذا ما وجدته لـ ${q} في كارفور.`,
+    cfAsk:"أي منتج تبحث عنه في كارفور؟",cfSearch:q=>`سمعتك جيداً، أنت تطلب ${q}، أبحث لك عنه في كارفور.`,cfHead:q=>`هذا ما وجدته لـ ${q} في كارفور.`,
     cfNone:"لم أجد شيئاً في كارفور.",cfFail:"كارفور غير متوفر حالياً.",cfOut:"غير متوفر.",cfNear:"أبحث عن أقرب كارفور.",cfNearHead:"أقرب كارفور.",cfNearNone:"لا يوجد كارفور على بعد أقل من 30 كيلومتراً.",
     askService:"أي خدمة تطلب؟ ساندويتش، قوائم، إذاعة…",
     mapOpen:"هذه هي الخريطة.",mapNone:"الخريطة غير متوفرة بدون إنترنت.",
@@ -1616,6 +1616,8 @@ const T = {
 let L = localStorage.getItem("lang") || "fr";
 const $ = id => document.getElementById(id);
 const S = () => T[L];
+/* article devant le plat annoncé (« tu demandes un sandwich ») */
+function frArt(q){ q = String(q).trim(); if(/[\u0600-\u06FF]/.test(q)) return ""; if(/[sx]$/i.test(q) || /^(pasta|spaghetti|macaroni)/i.test(q)) return "des "; if(/^(pizza|chawarma|shawarma|salade|soupe|cr[eê]pe|brique|assiette|p[aâ]te)/i.test(q)) return "une "; return "un "; }
 
 /* ---------- Voix ---------- */
 let lastText = "", speaking = false, listening = false, rec = null;
