@@ -1126,7 +1126,7 @@ const T = {
     perm:"Pour fonctionner, j'ai besoin de la position, du micro et de la boussole. Trois messages vont apparaître : acceptez chacun en touchant Autoriser. Vous ne le ferez qu'une seule fois.",
     tap:"Touchez l'écran",
     aria:"Farhoum. Touchez l'écran pour commencer. Une fois : où suis-je. Deux fois : répéter. Appui long : aide.",
-    help:"Vous pouvez parler. Dites : où suis-je, météo, heure, répète, silence, marche, arrête la marche, annonce horaire, menus, un plat comme sandwich ou pizza, arabe, ou aide. Ou touchez l'écran une fois pour savoir ce qu'il y a autour de vous, deux fois pour répéter, longtemps pour l'aide. Si je parle, un toucher me fait taire.",
+    help:"Vous pouvez parler. Dites : où suis-je, météo, heure, répète, silence, marche, arrête la marche, annonce horaire, menus, un plat comme sandwich ou pizza, arabe, ou aide. Ou touchez l'écran une fois pour savoir ce qu'il y a autour de vous, deux fois pour choisir un service, longtemps pour l'aide. Si je parle, un toucher me fait taire.",
     noMic:"La commande vocale n'est pas disponible sur ce navigateur. Utilisez les touchers.",
     fc:"Météo 3 jours",hrOn:"Annonce horaire : oui",hrOff:"Annonce horaire : non",
     hrSpokenOn:"Annonce de l'heure et de la météo à chaque heure activée.",hrSpokenOff:"Annonce horaire désactivée.",
@@ -1156,6 +1156,8 @@ const T = {
     f2None:"Je n'ai rien trouvé.",f2Fail:"La recherche n'est pas disponible pour le moment.",
     f2At:(d,w)=>`à ${d}, ${w}.`,
     permGps:"Position",permMic:"Micro",permYes:"autorisé",permNo:"refusé",
+    waitMore:"Patientez un peu, je vais vous fournir des données plus poussées dans quelque temps. Si vous cherchez un sandwich, les menus, la radio, touchez deux fois de suite.",
+    askService:"Quel service demandez-vous ? Sandwich, menus, radio…",
     mapOpen:"Voici la carte.",mapNone:"La carte n'est pas disponible sans internet.",
     f2Wide:km=>`Rien dans 3 kilomètres. Voici ce qu'il y a dans ${km} kilomètres.`,f2Stat:(n,m,k)=>`J'ai lu ${n} restaurants dans ${k} kilomètres, dont ${m} avec un menu, et aucun plat ne correspond.`},
   ar:{tts:"ar-SA",title:"فرحوم",go:"أين أنا؟",repeat:"أعد",stop:"صمت",
@@ -1173,7 +1175,7 @@ const T = {
     perm:"لأعمل أحتاج إلى الموقع والميكروفون والبوصلة. ستظهر ثلاث رسائل: اقبل كل واحدة بلمس السماح. ستفعل ذلك مرة واحدة فقط.",
     tap:"المس الشاشة",
     aria:"فرحوم. المس الشاشة للبدء. مرة: أين أنا. مرتان: إعادة. لمسة طويلة: مساعدة.",
-    help:"يمكنك الكلام. قل: أين أنا، طقس، الساعة، أعد، صمت، امش، أوقف المشي، كل ساعة، قوائم، اسم طبق مثل ساندويتش أو بيتزا، فرنسي، أو مساعدة. أو المس الشاشة مرة لتعرف ما حولك، مرتين للإعادة، ولمسة طويلة للمساعدة. إذا كنت أتكلم، لمسة واحدة تسكتني.",
+    help:"يمكنك الكلام. قل: أين أنا، طقس، الساعة، أعد، صمت، امش، أوقف المشي، كل ساعة، قوائم، اسم طبق مثل ساندويتش أو بيتزا، فرنسي، أو مساعدة. أو المس الشاشة مرة لتعرف ما حولك، مرتين لاختيار خدمة، ولمسة طويلة للمساعدة. إذا كنت أتكلم، لمسة واحدة تسكتني.",
     noMic:"الأوامر الصوتية غير متوفرة في هذا المتصفح. استعمل اللمس.",
     fc:"طقس 3 أيام",hrOn:"إعلان الساعة: نعم",hrOff:"إعلان الساعة: لا",
     hrSpokenOn:"تم تفعيل إعلان الوقت والطقس كل ساعة.",hrSpokenOff:"تم إيقاف إعلان الساعة.",
@@ -1201,6 +1203,8 @@ const T = {
     f2None:"لم أجد شيئاً.",f2Fail:"البحث غير متوفر حالياً.",
     f2At:(d,w)=>`على بعد ${d}، ${w}.`,
     permGps:"الموقع",permMic:"الميكروفون",permYes:"مسموح",permNo:"مرفوض",
+    waitMore:"انتظر قليلاً، سأوافيك بمعطيات أدق بعد قليل. إذا كنت تبحث عن ساندويتش أو قوائم أو إذاعة، المس الشاشة مرتين متتاليتين.",
+    askService:"أي خدمة تطلب؟ ساندويتش، قوائم، إذاعة…",
     mapOpen:"هذه هي الخريطة.",mapNone:"الخريطة غير متوفرة بدون إنترنت.",
     f2Wide:km=>`لا شيء في 3 كيلومترات. هذا ما وجدته في ${km} كيلومتر.`,f2Stat:(n,m,k)=>`قرأت ${n} مطعماً في ${k} كيلومتر، منها ${m} بقائمة، ولا طبق مطابق.`}
 };
@@ -1377,8 +1381,87 @@ const CAM_START_RE = new RegExp(CAM_WORD,"i");
 const RADIO_WORD = "\\brad[iy]os?\\b|\\bi[dz]h?a+[a3]*h?\\b|راديو|رادیو|ريديو|[اإأ]ذاع|مذياع|\\bmusi(?:que|ka|k|c)s?\\b|موسيق|ميوزيك|مزيكا|موزيكا";
 const RADIO_STOP_RE = new RegExp("(?:"+CAM_STOPW+")[^\\n]{0,20}(?:"+RADIO_WORD+")|(?:"+RADIO_WORD+")[^\\n]{0,20}(?:"+CAM_STOPW+")","i");
 const RADIO_START_RE = new RegExp(RADIO_WORD,"i");
+
+/* ---------- Radios tunisiennes et internationales (API Radio-Browser, comme dans Qitari) ---------- */
+const WR_HOSTS = ["https://de1.api.radio-browser.info","https://de2.api.radio-browser.info","https://nl1.api.radio-browser.info","https://at1.api.radio-browser.info"];
+let wrHost = null, stAudio = null, stToken = 0;
+function wrFetch(path){
+  const hosts = wrHost ? [wrHost].concat(WR_HOSTS.filter(h=>h!==wrHost)) : WR_HOSTS;
+  let i = 0;
+  const tryHost = ()=>{
+    if(i>=hosts.length) return Promise.reject(new Error("all hosts failed"));
+    const host = hosts[i++];
+    return fetch(host+path).then(r=>{ if(!r.ok) throw new Error("bad status"); wrHost = host; return r.json(); }).catch(tryHost);
+  };
+  return tryHost();
+}
+const FMW = "(?:\\s?(?:fm|f\\s?m|إف\\s?إم|اف\\s?ام))";
+const WR_STATIONS = [
+  /* Tunisie */
+  {rx:/\br\.?\s?t\.?\s?c\.?\s?i\b|ار\s?تي\s?سي\s?اي|آر\s?تي\s?سي\s?آي/i, q:["RTCI","Radio Tunis Chaine Internationale"], cc:"TN", label:"RTCI"},
+  {rx:/mosa[iï]que|mosaik|موزاي[يى]ك|موزاييك|ميزاي[يى]ك/i, q:["Mosaique FM","Mosaïque FM"], cc:"TN", label:"Mosaïque FM"},
+  {rx:/\bshems|\bchems|شمس\s?(?:اف\s?ام|إف\s?إم)?/i, q:["Shems FM","Chems FM"], cc:"TN", label:"Shems FM"},
+  {rx:/jawhara|jaouhara|جوهرة/i, q:["Jawhara FM"], cc:"TN", label:"Jawhara FM"},
+  {rx:new RegExp("express"+FMW+"|اكسبرس|إكسبرس","i"), q:["Express FM"], cc:"TN", label:"Express FM"},
+  {rx:/\bdiwan|ديوان/i, q:["Diwan FM"], cc:"TN", label:"Diwan FM"},
+  {rx:/zitouna|zaytouna|زيتونة/i, q:["Zitouna FM"], cc:"TN", label:"Zitouna FM"},
+  {rx:/\bi\s?f\s?m\b|اي\s?اف\s?ام/i, q:["IFM"], cc:"TN", label:"IFM"},
+  {rx:new RegExp("\\bcap"+FMW,"i"), q:["Cap FM"], cc:"TN", label:"Cap FM"},
+  {rx:/radio nationale|الاذاعة الوطنية|الإذاعة الوطنية/i, q:["Radio Nationale","Nationale"], cc:"TN", label:"Radio Nationale"},
+  /* International */
+  {rx:/\br\.?\s?t\.?\s?l\s?(?:2|deux)\b|ار\s?تي\s?ال\s?2/i, q:["RTL2"], cc:"FR", label:"RTL2"},
+  {rx:/\br\.?\s?t\.?\s?l\b|ار\s?تي\s?ال|آر\s?تي\s?إل/i, q:["RTL"], cc:"FR", label:"RTL", ok:/\brtl\b(?!\s*2)/i},
+  {rx:/europe\s?(?:1|un|one)\b|أوروب[اة]\s?1|اوروب[اة]\s?1/i, q:["Europe 1"], cc:"FR", label:"Europe 1"},
+  {rx:/\br\.?\s?m\.?\s?c\b|ار\s?ام\s?سي/i, q:["RMC"], cc:"FR", label:"RMC"},
+  {rx:/france\s?inter|فرانس\s?انتر/i, q:["France Inter"], cc:"FR", label:"France Inter"},
+  {rx:/france\s?info|فرانس\s?انفو/i, q:["France Info","franceinfo"], cc:"FR", label:"France Info"},
+  {rx:/france\s?culture/i, q:["France Culture"], cc:"FR", label:"France Culture"},
+  {rx:/france\s?musique/i, q:["France Musique"], cc:"FR", label:"France Musique"},
+  {rx:/\bn\.?\s?r\.?\s?j\b|انرجي|إنرجي/i, q:["NRJ"], cc:"FR", label:"NRJ"},
+  {rx:/skyrock|سكاي\s?روك/i, q:["Skyrock"], cc:"FR", label:"Skyrock"},
+  {rx:/fun\s?radio/i, q:["Fun Radio"], cc:"FR", label:"Fun Radio"},
+  {rx:/virgin\s?radio/i, q:["Virgin Radio"], cc:"FR", label:"Virgin Radio"},
+  {rx:/\br\.?\s?f\.?\s?i\b|ار\s?اف\s?اي/i, q:["RFI"], cc:"FR", label:"RFI"},
+  {rx:/\bb\.?\s?b\.?\s?c\b|بي\s?بي\s?سي/i, q:["BBC World Service"], cc:"GB", label:"BBC"},
+  {rx:/monte\s?carlo|مونتي\s?كارلو|مونت\s?كارلو/i, q:["Monte Carlo Doualiya","MCD"], cc:"FR", label:"Monte Carlo Doualiya"},
+  {rx:/radio\s?orient|راديو\s?اورينت/i, q:["Radio Orient"], cc:"FR", label:"Radio Orient"},
+  {rx:/al\s?jazeera|الجزيرة/i, q:["Al Jazeera"], cc:"QA", label:"Al Jazeera"},
+  {rx:/إذاعة القرآن|اذاعة القرآن|اذاعة القران|radio coran|quran radio/i, q:["Quran","Holy Quran"], cc:"EG", label:"القرآن الكريم"}
+];
+function stopStation(){
+  stToken++;
+  if(stAudio){ stAudio.onerror = null; try{ stAudio.pause(); }catch(_){} stAudio.removeAttribute("src"); try{ stAudio.load(); }catch(_){} }
+}
+function stopAllRadio(){ hideRadio(); stopStation(); }
+function tryStation(list,i,tok,label){
+  if(tok!==stToken || i>=list.length){ if(tok===stToken) status("📻 "+label+" ✕"); return; }
+  if(!stAudio) stAudio = new Audio();
+  const a = stAudio; let moved = false;
+  const next = ()=>{ if(moved || tok!==stToken) return; moved = true; a.onerror = null; tryStation(list,i+1,tok,label); };
+  a.onerror = next;
+  a.src = list[i].url_resolved || list[i].url;
+  const pr = a.play(); if(pr && pr.catch) pr.catch(next);
+  status("📻 "+label);
+}
+function playStation(st){
+  hideRadio(); stopStation();
+  const tok = stToken;
+  status("📻 "+st.label+" …");
+  Promise.all(st.q.map(t=>wrFetch("/json/stations/search?name="+encodeURIComponent(t)+"&countrycode="+st.cc+"&hidebroken=true&order=clickcount&reverse=true&limit=25").catch(()=>[]))).then(arrs=>{
+    if(tok!==stToken) return;
+    const seen = {};
+    let all = [].concat(...arrs).filter(x=>{ const u = x.url_resolved||x.url; if(!u || seen[u]) return false; seen[u] = 1; return !st.ok || st.ok.test(x.name||""); });
+    all.sort((a,b)=>(b.clickcount||0)-(a.clickcount||0));
+    const https = all.filter(x=>/^https:/i.test(x.url_resolved||x.url));
+    tryStation(https.concat(all.filter(x=>!https.includes(x))),0,tok,st.label);
+  });
+}
+const WR_ANY = new RegExp(WR_STATIONS.map(x=>"(?:"+x.rx.source+")").join("|"),"i");
+const WR_STOP_RE = new RegExp("(?:"+CAM_STOPW+")[^\\n]{0,20}(?:"+WR_ANY.source+")|(?:"+WR_ANY.source+")[^\\n]{0,20}(?:"+CAM_STOPW+")","i");
 const CMD = [
-  [RADIO_STOP_RE, ()=>hideRadio()],
+  [WR_STOP_RE, ()=>stopAllRadio()],
+  [RADIO_STOP_RE, ()=>stopAllRadio()],
+  [WR_ANY, (t)=>{ const st = WR_STATIONS.find(x=>x.rx.test(t)); if(st) playStation(st); }],
   [RADIO_START_RE, ()=>showRadio()],
   [CAM_STOP_RE, ()=>camStop()],
   [CAM_START_RE, ()=>camStart()],
@@ -2029,6 +2112,7 @@ document.addEventListener("keydown",e=>{ if(e.key==="Escape" && mapOpen) hideMap
 let radioOpen = false, radioUrl = null;
 function showRadio(){
   if(radioOpen || !window.RADIO_HTML) return;
+  stopStation();
   radioOpen = true;
   if(!radioUrl) radioUrl = URL.createObjectURL(new Blob([window.RADIO_HTML],{type:"text/html"}));
   const f = document.createElement("iframe"); f.id = "radioFrame";
@@ -2207,6 +2291,7 @@ async function whereAmI(){
     const near = pl ? lastNear : [];
     mapDataPos = {lat,lon}; if(mapOpen) renderMap();
     speak(txt.trim(), first);
+    speak(S().waitMore, true);
     svcP.then(found=>{
       if(!found || svcGen!==myGen) return;
       lastSvc = found; mapDataPos = {lat,lon}; if(mapOpen) renderMap();
@@ -2330,7 +2415,7 @@ go.onclick = ()=>{
   if(pressFired){ pressFired = false; return; }
   if(!started){ activate(); return; }                                       // premier toucher : démarrage immédiat
   if(speechSynthesis.speaking){ hush(); return; }                            // un toucher = silence
-  if(tapTimer){ clearTimeout(tapTimer); tapTimer = null; lastText && speak(lastText); return; } // deux touchers = répéter
+  if(tapTimer){ clearTimeout(tapTimer); tapTimer = null; speak(S().askService); return; } // deux touchers = demander quel service (la réponse passe par les commandes vocales)
   tapTimer = setTimeout(()=>{ tapTimer = null; activate(); },350);          // un toucher = où suis-je
 };
 $("fc").onclick = forecast;
