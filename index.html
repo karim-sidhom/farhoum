@@ -1650,6 +1650,9 @@ function startListen(){
   try{ rec.start(); }catch(_){ rec = null; }
 }
 function stopListen(){ if(rec){ const r = rec; rec = null; try{ r.abort(); }catch(_){} } }
+/* musique / radio lancée : le micro se coupe et ne revient qu'au prochain toucher sur Farhoum */
+let micPausedForMusic = false, musicMicTok = -1;
+function micToMusic(){ micPausedForMusic = true; listening = false; stopListen(); }
 /* Plats reconnus à la voix (mêmes groupes de mots que farhoum2) : [mots dits, mots cherchés dans les menus] */
 const DISH_SYN = [
   [['pizza','بيتزا','بيتسا','margherita'],['pizza','بيتزا','margherita','calzone']],
@@ -1908,7 +1911,7 @@ function tryStation(list,i,tok,label){
   a.onerror = next;
   /* relance automatique si le flux se coupe tout seul (réseau, système) ; jamais après un arrêt voulu (stToken change) */
   let tries = 0;
-  a.onplaying = ()=>{ tries = 0; };
+  a.onplaying = ()=>{ tries = 0; if(musicMicTok!==tok){ musicMicTok = tok; micToMusic(); } };
   const resume = ()=>{ setTimeout(()=>{
     if(tok!==stToken || tries++>=30) return;
     if(a.paused || a.ended){
@@ -2607,6 +2610,7 @@ function showRadio(){
   if(radioOpen || !window.RADIO_HTML) return;
   stopStation();
   radioOpen = true;
+  micToMusic();
   if(!radioUrl) radioUrl = URL.createObjectURL(new Blob([window.RADIO_HTML],{type:"text/html"}));
   const f = document.createElement("iframe"); f.id = "radioFrame";
   f.setAttribute("allow","autoplay");
@@ -3085,6 +3089,7 @@ go.addEventListener("pointerdown",()=>{ pressFired = false; pressTimer = setTime
 ["pointerup","pointercancel","pointerleave"].forEach(ev=>go.addEventListener(ev,()=>clearTimeout(pressTimer)));
 go.onclick = ()=>{
   if(pressFired){ pressFired = false; return; }
+  if(micPausedForMusic){ micPausedForMusic = false; listening = !!SR && micOK; startListen(); return; }   // musique/radio en cours : ce toucher ne fait que rallumer le micro
   if(!started){ activate(); return; }                                       // premier toucher : démarrage immédiat
   const now = Date.now();
   if(speechSynthesis.speaking && now-hushAt>600){ hush(); hushAt = now; return; }   // un toucher = silence
