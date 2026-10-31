@@ -1158,7 +1158,7 @@ const T = {
     permGps:"Position",permMic:"Micro",permYes:"autorisé",permNo:"refusé",
     waitMore:"Patientez un peu, je vais vous fournir des données plus poussées dans quelque temps. Si vous cherchez un sandwich, les menus, la radio, touchez deux fois de suite.",
     cfAsk:"Quel produit cherchez-vous chez Carrefour ?",cfSearch:q=>`Je cherche ${q} chez Carrefour.`,cfHead:q=>`Voici ce que j'ai trouvé pour ${q} chez Carrefour.`,
-    cfNone:"Je n'ai rien trouvé chez Carrefour.",cfFail:"Carrefour n'est pas disponible pour le moment.",cfOut:"Épuisé.",
+    cfNone:"Je n'ai rien trouvé chez Carrefour.",cfFail:"Carrefour n'est pas disponible pour le moment.",cfOut:"Épuisé.",cfNear:"Je cherche le Carrefour le plus proche.",cfNearHead:"Le Carrefour le plus proche.",cfNearNone:"Aucun Carrefour à moins de 30 kilomètres.",
     askService:"Quel service demandez-vous ? Sandwich, menus, radio…",
     mapOpen:"Voici la carte.",mapNone:"La carte n'est pas disponible sans internet.",
     f2Wide:km=>`Rien dans 3 kilomètres. Voici ce qu'il y a dans ${km} kilomètres.`,f2Stat:(n,m,k)=>`J'ai lu ${n} restaurants dans ${k} kilomètres, dont ${m} avec un menu, et aucun plat ne correspond.`},
@@ -1207,7 +1207,7 @@ const T = {
     permGps:"الموقع",permMic:"الميكروفون",permYes:"مسموح",permNo:"مرفوض",
     waitMore:"انتظر قليلاً، سأوافيك بمعطيات أدق بعد قليل. إذا كنت تبحث عن ساندويتش أو قوائم أو إذاعة، المس الشاشة مرتين متتاليتين.",
     cfAsk:"أي منتج تبحث عنه في كارفور؟",cfSearch:q=>`أبحث عن ${q} في كارفور.`,cfHead:q=>`هذا ما وجدته لـ ${q} في كارفور.`,
-    cfNone:"لم أجد شيئاً في كارفور.",cfFail:"كارفور غير متوفر حالياً.",cfOut:"غير متوفر.",
+    cfNone:"لم أجد شيئاً في كارفور.",cfFail:"كارفور غير متوفر حالياً.",cfOut:"غير متوفر.",cfNear:"أبحث عن أقرب كارفور.",cfNearHead:"أقرب كارفور.",cfNearNone:"لا يوجد كارفور على بعد أقل من 30 كيلومتراً.",
     askService:"أي خدمة تطلب؟ ساندويتش، قوائم، إذاعة…",
     mapOpen:"هذه هي الخريطة.",mapNone:"الخريطة غير متوفرة بدون إنترنت.",
     f2Wide:km=>`لا شيء في 3 كيلومترات. هذا ما وجدته في ${km} كيلومتر.`,f2Stat:(n,m,k)=>`قرأت ${n} مطعماً في ${k} كيلومتر، منها ${m} بقائمة، ولا طبق مطابق.`}
@@ -1396,6 +1396,27 @@ function cfTerm(t){
     .replace(/(?:^|\s)(?:سعر|أسعار|اسعار|عند|ابحث عن|أبحث عن|اريد|أريد|من|في)(?=\s|$)/g," ")
     .replace(/\s+/g," ").trim();
 }
+/* Carrefour le plus proche (OpenStreetMap / Overpass, mêmes serveurs que le reste de Farhoum) */
+const CF_NEAR_RE = /(?:carrefour|كارفور).*(?:proche|pr[èe]s|loin|o[ùu]|adresse|magasin|أقرب|قريب|أين|وين)|(?:proche|pr[èe]s|o[ùu]|adresse|magasin|أقرب|قريب|أين|وين).*(?:carrefour|كارفور)/i;
+async function carrefourNear(){
+  svcToken++; svcGen++; speechSynthesis.cancel(); cfWait = 0;
+  const id = ++readId, s = S();
+  lastText = s.cfNear; $("out").textContent = lastText; sayQ(lastText);
+  try{
+    const pos = await getPos(); if(id!==readId) return;
+    const lat = pos.coords.latitude, lon = pos.coords.longitude;
+    const q = `[out:json][timeout:15];(nwr(around:30000,${lat},${lon})["name"~"carrefour|كارفور",i];nwr(around:30000,${lat},${lon})["brand"~"carrefour",i];);out center 60;`;
+    const pend = MIRRORS.map(url=>fetch(url,{method:"POST",body:"data="+encodeURIComponent(q)}).then(r=>{ if(!r.ok) throw new Error(r.status); return r.json(); }));
+    const j = await new Promise((ok,ko)=>{ let n = 0; pend.forEach(p=>p.then(ok,e=>{ if(++n===pend.length) ko(e); })); });
+    if(id!==readId) return;
+    const list = (j.elements||[]).map(e=>({lat:e.lat??e.center?.lat, lon:e.lon??e.center?.lon, name:(e.tags&&(e.tags["name:"+L]||e.tags.name))||"Carrefour"}))
+      .filter(x=>x.lat!=null).map(x=>({...x,d:dist(lat,lon,x.lat,x.lon)})).sort((a,b)=>a.d-b.d);
+    if(!list.length){ lastText = s.cfNearNone; $("out").textContent = lastText; sayQ(lastText); return; }
+    const c = list[0];
+    lastText = s.cfNearHead+" "+c.name+" "+s.f2At(svcDist(c.d), where(bearing(lat,lon,c.lat,c.lon))); $("out").textContent = lastText;
+    sayQ(s.cfNearHead); sayQ(c.name,glvLang(c.name)); sayQ(s.f2At(svcDist(c.d), where(bearing(lat,lon,c.lat,c.lon))));
+  }catch(e){ if(id===readId){ lastText = e && e.code ? gpsMsg(e) : s.cfFail; $("out").textContent = lastText; sayQ(lastText); } }
+}
 async function carrefourSearch(q){
   svcToken++; svcGen++; speechSynthesis.cancel(); cfWait = 0;
   const id = ++readId, s = S();
@@ -1493,6 +1514,7 @@ function playStation(st){
 const WR_ANY = new RegExp(WR_STATIONS.map(x=>"(?:"+x.rx.source+")").join("|"),"i");
 const WR_STOP_RE = new RegExp("(?:"+CAM_STOPW+")[^\\n]{0,20}(?:"+WR_ANY.source+")|(?:"+WR_ANY.source+")[^\\n]{0,20}(?:"+CAM_STOPW+")","i");
 const CMD = [
+  [CF_NEAR_RE, ()=>carrefourNear()],
   [CF_RE, (t)=>{ const q = cfTerm(t); if(q) carrefourSearch(q); else { cfWait = Date.now(); speak(S().cfAsk); } }],
   [WR_STOP_RE, ()=>stopAllRadio()],
   [RADIO_STOP_RE, ()=>stopAllRadio()],
@@ -1518,7 +1540,9 @@ const CMD = [
   [/aide|help|مساعدة|ساعدني/, ()=>speak(S().help)],
   /* en dernier : tout ce qui n'est pas une autre commande, « lait » ou « je veux du lait », = prix chez Carrefour */
   [/\S/, (t)=>{
-    const q = cfTerm(t.replace(/^\s*(?:je veux|je voudrais|j'ai besoin d[eu']?|acheter|أريد|اريد|أبغى|نحب)\s+/i,""));
+    const pre = /^\s*(?:je veux|je voudrais|j'ai besoin d[eu']?|acheter|أريد|اريد|أبغى|نحب)\s+/i;
+    if((radioOpen || (stAudio && !stAudio.paused)) && !pre.test(t)) return;   // musique en cours : le micro entend les paroles, elles ne doivent pas lancer de recherche
+    const q = cfTerm(t.replace(pre,""));
     if(!q || q.length<3 || q.split(" ").length>3 || /^(?:bonjour|salut|merci|oui|non|ok|d'accord|bonsoir|allo|allô|نعم|لا|شكرا|مرحبا|السلام عليكم|اه)$/i.test(q)) return;
     carrefourSearch(q);
   }]
