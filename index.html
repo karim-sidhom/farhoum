@@ -1906,6 +1906,17 @@ function tryStation(list,i,tok,label){
   const a = stAudio; let moved = false;
   const next = ()=>{ if(moved || tok!==stToken) return; moved = true; a.onerror = null; tryStation(list,i+1,tok,label); };
   a.onerror = next;
+  /* relance automatique si le flux se coupe tout seul (réseau, système) ; jamais après un arrêt voulu (stToken change) */
+  let tries = 0;
+  a.onplaying = ()=>{ tries = 0; };
+  const resume = ()=>{ setTimeout(()=>{
+    if(tok!==stToken || tries++>=30) return;
+    if(a.paused || a.ended){
+      if(a.ended || a.networkState===3){ a.src = list[i].url_resolved || list[i].url; }
+      const q = a.play(); if(q && q.catch) q.catch(()=>{});
+    }
+  },400); };
+  a.onpause = resume; a.onended = resume;
   a.src = list[i].url_resolved || list[i].url;
   const pr = a.play(); if(pr && pr.catch) pr.catch(next);
   status("📻 "+label);
