@@ -1941,6 +1941,31 @@ function playStation(st){
 }
 const WR_ANY = new RegExp(WR_STATIONS.map(x=>"(?:"+x.rx.source+")").join("|"),"i");
 const WR_STOP_RE = new RegExp("(?:"+CAM_STOPW+")[^\\n]{0,20}(?:"+WR_ANY.source+")|(?:"+WR_ANY.source+")[^\\n]{0,20}(?:"+CAM_STOPW+")","i");
+/* ---------- Wikipédia : on pose une question, Farhoum répond comme Aladin (même méthode que askEncyclopedia de la lampe d'Aladin) ---------- */
+const WK_TXT = {
+  ar:{wait:'ثواني نلوّج لك في الموسوعة يا سيدي...', none:'عذراً، ما لقيتش معلومة على هذا الموضوع في الموسوعة.', nodet:t=>'ما لقيتش تفاصيل كافية على '+t+'.', fail:'صار خطأ باش نجيب المعلومة من الموسوعة، جرب مرة أخرى.'},
+  fr:{wait:"Un instant monsieur, je cherche dans l'encyclopédie...", none:"Désolé, je n'ai trouvé aucune information sur ce sujet dans l'encyclopédie.", nodet:t=>"Je n'ai pas trouvé assez de détails sur "+t+".", fail:"Une erreur est survenue en consultant l'encyclopédie, réessayez."}
+};
+const WK_Q_RE = /^\s*(?:qui\s+(?:est|était|etait|sont|a)\b|qu'?est[- ]ce\b|c'?est quoi\b|quel(?:le)?s?\s+(?:est|sont|était|etait)\b|quand\b|pourquoi\b|parle[- ]moi\b|dis[- ]moi\b|raconte(?:[- ]moi)?\b|explique(?:[- ]moi)?\b|définition\b|definition\b)|من هو|من هي|من كان|من كانت|ما هو|ما هي|ما معنى|متى|لماذا|حدثني|أخبرني|اخبرني|احكي لي|شكون|شنوة|شنية|علاش/i;
+async function askEncyclopedia(query){
+  hush();
+  const tok = svcToken;
+  const lang = /[؀-ۿ]/.test(query) ? 'ar' : 'fr', tx = WK_TXT[lang], tts = lang==='ar' ? 'ar-SA' : 'fr-FR';
+  const say = (text)=>{ lastText = text; $("out").textContent = text; sayQ(text,tts); };
+  say(tx.wait);
+  try{
+    const sj = await (await fetch('https://'+lang+'.wikipedia.org/w/api.php?action=query&list=search&srsearch='+encodeURIComponent(query)+'&format=json&origin=*')).json();
+    if(tok!==svcToken) return;
+    const hits = sj && sj.query && sj.query.search;
+    if(!hits || !hits.length){ say(tx.none); return; }
+    const title = hits[0].title;
+    const ej = await (await fetch('https://'+lang+'.wikipedia.org/w/api.php?action=query&prop=extracts&exintro&explaintext&titles='+encodeURIComponent(title)+'&format=json&origin=*')).json();
+    if(tok!==svcToken) return;
+    const pages = ej.query.pages, pid = Object.keys(pages)[0], extract = (pages[pid] && pages[pid].extract) || '';
+    if(!extract){ say(tx.nodet(title)); return; }
+    say(extract.length>700 ? extract.slice(0,700)+'…' : extract);
+  }catch(_){ if(tok===svcToken) say(tx.fail); }
+}
 const CMD = [
   [GT_NEAR_RE, ()=>shopNear(SHOPS.gt)],
   [GT_RE, (t)=>{ const q = cfTerm(t); if(q) shopSearch(q,SHOPS.gt); else { cfWait = Date.now(); cfShop = SHOPS.gt; speak(shT(SHOPS.gt,S().cfAsk)); } }],
@@ -1968,11 +1993,13 @@ const CMD = [
   [/arabe|عربي|بالعربية/, ()=>{ if(L!=="ar") $("lang").click(); else speak(S().title); }],
   [/français|francais|فرنسي|بالفرنسية/, ()=>{ if(L!=="fr") $("lang").click(); else speak(S().title); }],
   [/aide|help|مساعدة|ساعدني/, ()=>speak(S().help)],
+  [WK_Q_RE, (t)=>{ if(radioOpen || (stAudio && !stAudio.paused)) return; askEncyclopedia(t); }],
   /* en dernier : tout ce qui n'est pas une autre commande, « lait » ou « je veux du lait », = prix chez Carrefour */
   [/\S/, (t)=>{
     const pre = /^\s*(?:je veux|je voudrais|j'ai besoin d[eu']?|acheter|أريد|اريد|أبغى|نحب)\s+/i;
     if((radioOpen || (stAudio && !stAudio.paused)) && !pre.test(t)) return;   // musique en cours : le micro entend les paroles, elles ne doivent pas lancer de recherche
     const q = cfTerm(t.replace(pre,""));
+    if(q && q.split(" ").length>3){ askEncyclopedia(t); return; }   // longue phrase = question : réponse de Wikipédia (comme Aladin)
     if(!q || q.length<3 || q.split(" ").length>3 || /^(?:bonjour|salut|merci|oui|non|ok|d'accord|bonsoir|allo|allô|نعم|لا|شكرا|مرحبا|السلام عليكم|اه)$/i.test(q)) return;
     carrefourSearch(q);
   }]
