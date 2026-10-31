@@ -1242,8 +1242,14 @@ function speakDone(){
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 function startListen(){
   if(!SR || rec || speaking) return;
-  rec = new SR(); rec.lang = S().tts; rec.continuous = true; rec.interimResults = false;
-  rec.onresult = e => command(e.results[e.results.length-1][0].transcript.toLowerCase().trim());
+  rec = new SR(); rec.lang = S().tts; rec.continuous = true; rec.interimResults = false; rec.maxAlternatives = 5;
+  rec.onresult = e => {
+    /* le micro propose jusqu'à 5 versions de ce qu'il a entendu : on prend la première qui correspond à une vraie commande (la recherche libre « lait » ne compte pas) */
+    const r = e.results[e.results.length-1], alts = [];
+    for(let i=0;i<r.length;i++) alts.push(r[i].transcript.toLowerCase().trim());
+    const spec = CMD.slice(0,-1);
+    command(alts.find(a=>spec.some(([re])=>re.test(a))) || alts[0]);
+  };
   rec.onerror = ev => { if(ev.error==="not-allowed"||ev.error==="service-not-allowed") listening = false; };
   rec.onend = () => { rec = null; if(listening && !speaking) setTimeout(startListen,300); };
   try{ rec.start(); }catch(_){ rec = null; }
@@ -1390,8 +1396,8 @@ const RADIO_START_RE = new RegExp(RADIO_WORD,"i");
 const CF_W = "https://carrefour.lordsidhom78.workers.dev";
 const GT_W = "https://geant.lordsidhom78.workers.dev";
 let cfWait = 0, cfShop = null;
-const CF_RE = /carrefour|كارفور|كرفور|كارفو/i;
-const GT_RE = /g[ée]ant|giant|جيان|جيون|جيانت/i;
+const CF_RE = /carrefour|\bcar+e?\s?f[oau]u?r?t?\b|كا?ر+\s?فو?ر?/i;
+const GT_RE = /g[ée]+\s?an+t?\b|\bj[ée]?\s?an+t?\b|\bd?j[ée]?an\b|gi[ae]nt|جيان|جيون|جيانت|جايان/i;
 const CF_NEAR_WORDS = "proche|pr[èe]s|loin|o[ùu]|adresse|magasin|أقرب|قريب|أين|وين";
 const mkNear = re => new RegExp("(?:"+re.source+").*(?:"+CF_NEAR_WORDS+")|(?:"+CF_NEAR_WORDS+").*(?:"+re.source+")","i");
 const CF_NEAR_RE = mkNear(CF_RE), GT_NEAR_RE = mkNear(GT_RE);
