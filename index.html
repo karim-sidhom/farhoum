@@ -3276,6 +3276,7 @@ window.RADIO_HTML = "<!DOCTYPE html>\n<html lang=\"ar\" dir=\"rtl\">\n<head>\n  
     autoTimer=setInterval(function(){
       var s=spout(), i;
       setCharge(charge+2.4);
+      if(revealed) return;                      /* le génie est sorti : plus de frottement ni de bruit */
       for(i=0;i<2;i++) addSmoke(s.x+(Math.random()*30-15), s.y,'smoke',0.6+Math.random()*0.4,1);
       if(Math.random()<0.3) addSmoke(s.x+(Math.random()*20-10), s.y,'gold',0.4,1);
       rubSound(true, 0.4+Math.random()*0.4);
