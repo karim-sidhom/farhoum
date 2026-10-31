@@ -1152,7 +1152,7 @@ const T = {
     glvNoCity:"Aucune ville couverte à moins de 60 kilomètres.",glvFail:"Restaurants indisponibles.",
     glvHead:c=>`Restaurants disponibles à ${c}.`,glvMenus:"Menus.",glvMenuOf:n=>`Menu de ${n}.`,glvNoMenu:"Menu indisponible.",
     dish:(n,p)=>p!=null?`${n}, ${p} dinars. `:`${n}. `,
-    f2Search:q=>`Je cherche ${q} près de vous.`,f2Head:q=>`Voici ce que j'ai trouvé pour ${q}.`,
+    f2Search:q=>`Je cherche des ${/^[a-z]/i.test(q)&&!/[sx]$/i.test(q)?q+"s":q} près de vous.`,f2Head:q=>`Voici ce que j'ai trouvé pour ${q}.`,
     f2None:"Je n'ai rien trouvé.",f2Fail:"La recherche n'est pas disponible pour le moment.",
     f2At:(d,w)=>`à ${d}, ${w}.`,
     permGps:"Position",permMic:"Micro",permYes:"autorisé",permNo:"refusé",
@@ -1214,7 +1214,7 @@ const S = () => T[L];
 
 /* ---------- Voix ---------- */
 let lastText = "", speaking = false, listening = false, rec = null;
-let svcToken = 0, readId = 0, svcGen = 0, dishMode = false;
+let svcToken = 0, readId = 0, svcGen = 0, dishMode = false, serviceMode = false;
 function hush(){ svcToken++; svcGen++; readId++; dishMode = false; speechSynthesis.cancel(); }
 function speak(text, add){
   lastText = add ? lastText+" "+text : text;
@@ -2269,7 +2269,7 @@ async function addressText(lat,lon){
 
 async function whereAmI(){
   if(busy) return; busy = true;
-  const myGen = ++svcGen; dishMode = false;
+  const myGen = ++svcGen; dishMode = false; serviceMode = false;   // un toucher / « où suis-je » = retour au mode lieu
   try{
     speak(S().locating);
     const p = await getPos();
@@ -2317,6 +2317,7 @@ function setAuto(on){
       if(h != null && !isNaN(h) && p.coords.speed > 0.7) heading = h;
       const now = Date.now();
       if(lastSpoken && (dist(lat,lon,lastSpoken.lat,lastSpoken.lon) < 35 || now-lastTime < 15000)) return;
+      if(serviceMode) return;                 // en mode service : pas de description du lieu
       if(busy) return;
       if(dishMode){ if(speechSynthesis.speaking) return; dishMode = false; }
       lastSpoken = {lat,lon}; lastTime = now;
@@ -2393,7 +2394,8 @@ async function askPermissions(){
   await waitSpeech();
   startGpsWatch();
 }
-let started = false, tapTimer = null, pressTimer = null, pressFired = false;
+let started = false, tapTimer = null, pressTimer = null, pressFired = false, hushAt = 0;
+function serviceMenu(){ serviceMode = true; svcGen++; speak(S().askService); }   // mode service : ni description du lieu ni services automatiques, un seul toucher pour revenir au lieu
 async function activate(){
   if(!started){
     started = true;
@@ -2414,8 +2416,9 @@ go.addEventListener("pointerdown",()=>{ pressFired = false; pressTimer = setTime
 go.onclick = ()=>{
   if(pressFired){ pressFired = false; return; }
   if(!started){ activate(); return; }                                       // premier toucher : démarrage immédiat
-  if(speechSynthesis.speaking){ hush(); return; }                            // un toucher = silence
-  if(tapTimer){ clearTimeout(tapTimer); tapTimer = null; speak(S().askService); return; } // deux touchers = demander quel service (la réponse passe par les commandes vocales)
+  const now = Date.now();
+  if(speechSynthesis.speaking && now-hushAt>600){ hush(); hushAt = now; return; }   // un toucher = silence
+  if(tapTimer || now-hushAt<=600){ clearTimeout(tapTimer); tapTimer = null; hushAt = 0; serviceMenu(); return; } // deux touchers = mode service seulement (la réponse passe par les commandes vocales)
   tapTimer = setTimeout(()=>{ tapTimer = null; activate(); },350);          // un toucher = où suis-je
 };
 $("fc").onclick = forecast;
