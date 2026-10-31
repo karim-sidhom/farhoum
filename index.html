@@ -1386,56 +1386,67 @@ const RADIO_WORD = "\\brad[iy]os?\\b|\\bi[dz]h?a+[a3]*h?\\b|راديو|رادی�
 const RADIO_STOP_RE = new RegExp("(?:"+CAM_STOPW+")[^\\n]{0,20}(?:"+RADIO_WORD+")|(?:"+RADIO_WORD+")[^\\n]{0,20}(?:"+CAM_STOPW+")","i");
 const RADIO_START_RE = new RegExp(RADIO_WORD,"i");
 
-/* ---------- Carrefour Tunisie : prix des produits (worker « carrefour » → API GraphQL de carrefour.tn) ---------- */
+/* ---------- Magasins en ligne : Carrefour Tunisie (worker « carrefour ») et Géant (worker « geant ») : prix + magasin le plus proche ---------- */
 const CF_W = "https://carrefour.lordsidhom78.workers.dev";
-let cfWait = 0;
-const CF_RE = /carrefour|كارفور|كارفور|كرفور|كارفو/i;
+const GT_W = "https://geant.lordsidhom78.workers.dev";
+let cfWait = 0, cfShop = null;
+const CF_RE = /carrefour|كارفور|كرفور|كارفو/i;
+const GT_RE = /g[ée]ant|giant|جيان|جيون|جيانت/i;
+const CF_NEAR_WORDS = "proche|pr[èe]s|loin|o[ùu]|adresse|magasin|أقرب|قريب|أين|وين";
+const mkNear = re => new RegExp("(?:"+re.source+").*(?:"+CF_NEAR_WORDS+")|(?:"+CF_NEAR_WORDS+").*(?:"+re.source+")","i");
+const CF_NEAR_RE = mkNear(CF_RE), GT_NEAR_RE = mkNear(GT_RE);
+const SHOPS = {
+  cf:{w:CF_W, name:"Carrefour", ov:"carrefour|كارفور", ovb:"carrefour"},
+  gt:{w:GT_W, name:"Géant", ov:"g[ée]ant|giant|جيان|جيون", ovb:"g[ée]ant|giant"}
+};
+const shT = (shop,t) => t.replace(/Carrefour|كارفور/g, shop.name);
 function cfTerm(t){
-  return t.replace(CF_RE," ")
+  return t.replace(CF_RE," ").replace(GT_RE," ")
     .replace(/\b(?:prix|chez|cherche|chercher|je veux|je voudrais|du|de la|de l'|des|de|le|la|les|un|une|au)\b/gi," ")
     .replace(/(?:^|\s)(?:سعر|أسعار|اسعار|عند|ابحث عن|أبحث عن|اريد|أريد|من|في)(?=\s|$)/g," ")
     .replace(/\s+/g," ").trim();
 }
-/* Carrefour le plus proche (OpenStreetMap / Overpass, mêmes serveurs que le reste de Farhoum) */
-const CF_NEAR_RE = /(?:carrefour|كارفور).*(?:proche|pr[èe]s|loin|o[ùu]|adresse|magasin|أقرب|قريب|أين|وين)|(?:proche|pr[èe]s|o[ùu]|adresse|magasin|أقرب|قريب|أين|وين).*(?:carrefour|كارفور)/i;
-async function carrefourNear(){
+async function shopNear(shop){
+  shop = shop || SHOPS.cf;
   svcToken++; svcGen++; speechSynthesis.cancel(); cfWait = 0;
   const id = ++readId, s = S();
-  lastText = s.cfNear; $("out").textContent = lastText; sayQ(lastText);
+  lastText = shT(shop,s.cfNear); $("out").textContent = lastText; sayQ(lastText);
   try{
     const pos = await getPos(); if(id!==readId) return;
     const lat = pos.coords.latitude, lon = pos.coords.longitude;
-    const q = `[out:json][timeout:15];(nwr(around:30000,${lat},${lon})["name"~"carrefour|كارفور",i];nwr(around:30000,${lat},${lon})["brand"~"carrefour",i];);out center 60;`;
+    const q = `[out:json][timeout:15];(nwr(around:30000,${lat},${lon})["name"~"${shop.ov}",i];nwr(around:30000,${lat},${lon})["brand"~"${shop.ovb}",i];);out center 60;`;
     const pend = MIRRORS.map(url=>fetch(url,{method:"POST",body:"data="+encodeURIComponent(q)}).then(r=>{ if(!r.ok) throw new Error(r.status); return r.json(); }));
     const j = await new Promise((ok,ko)=>{ let n = 0; pend.forEach(p=>p.then(ok,e=>{ if(++n===pend.length) ko(e); })); });
     if(id!==readId) return;
-    const list = (j.elements||[]).map(e=>({lat:e.lat??e.center?.lat, lon:e.lon??e.center?.lon, name:(e.tags&&(e.tags["name:"+L]||e.tags.name))||"Carrefour"}))
+    const list = (j.elements||[]).map(e=>({lat:e.lat??e.center?.lat, lon:e.lon??e.center?.lon, name:(e.tags&&(e.tags["name:"+L]||e.tags.name))||shop.name}))
       .filter(x=>x.lat!=null).map(x=>({...x,d:dist(lat,lon,x.lat,x.lon)})).sort((a,b)=>a.d-b.d);
-    if(!list.length){ lastText = s.cfNearNone; $("out").textContent = lastText; sayQ(lastText); return; }
-    const c = list[0];
-    lastText = s.cfNearHead+" "+c.name+" "+s.f2At(svcDist(c.d), where(bearing(lat,lon,c.lat,c.lon))); $("out").textContent = lastText;
-    sayQ(s.cfNearHead); sayQ(c.name,glvLang(c.name)); sayQ(s.f2At(svcDist(c.d), where(bearing(lat,lon,c.lat,c.lon))));
-  }catch(e){ if(id===readId){ lastText = e && e.code ? gpsMsg(e) : s.cfFail; $("out").textContent = lastText; sayQ(lastText); } }
+    if(!list.length){ lastText = shT(shop,s.cfNearNone); $("out").textContent = lastText; sayQ(lastText); return; }
+    const c = list[0], at = s.f2At(svcDist(c.d), where(bearing(lat,lon,c.lat,c.lon)));
+    lastText = shT(shop,s.cfNearHead)+" "+c.name+" "+at; $("out").textContent = lastText;
+    sayQ(shT(shop,s.cfNearHead)); sayQ(c.name,glvLang(c.name)); sayQ(at);
+  }catch(e){ if(id===readId){ lastText = e && e.code ? gpsMsg(e) : shT(shop,s.cfFail); $("out").textContent = lastText; sayQ(lastText); } }
 }
-async function carrefourSearch(q){
+async function shopSearch(q,shop){
+  shop = shop || SHOPS.cf;
   svcToken++; svcGen++; speechSynthesis.cancel(); cfWait = 0;
   const id = ++readId, s = S();
-  lastText = s.cfSearch(q); $("out").textContent = lastText; sayQ(lastText);
+  lastText = shT(shop,s.cfSearch(q)); $("out").textContent = lastText; sayQ(lastText);
   try{
-    const r = await fetch(CF_W+"/?q="+encodeURIComponent(q)+"&n=6"); const j = await r.json();
+    const r = await fetch(shop.w+"/?q="+encodeURIComponent(q)+"&n=6"); const j = await r.json();
     if(id!==readId) return;
-    if(!r.ok || !j.produits) throw new Error("cf");
+    if(!r.ok || !j.produits) throw new Error("shop");
     const list = j.produits;
-    if(!list.length){ lastText = s.cfNone; $("out").textContent = lastText; sayQ(lastText); return; }
-    lastText = s.cfHead(q)+" "+list.map(x=>x.nom+" "+(x.prix!=null?x.prix:"")).join(", "); $("out").textContent = lastText;
-    sayQ(s.cfHead(q));
+    if(!list.length){ lastText = shT(shop,s.cfNone); $("out").textContent = lastText; sayQ(lastText); return; }
+    lastText = shT(shop,s.cfHead(q))+" "+list.map(x=>x.nom+" "+(x.prix!=null?x.prix:"")).join(", "); $("out").textContent = lastText;
+    sayQ(shT(shop,s.cfHead(q)));
     list.forEach(x=>{
       sayQ(x.nom,glvLang(x.nom));
       if(x.prix!=null) sayQ(s.dish("",x.prix).replace(/^[,،]\s*/,""));
       if(!x.dispo) sayQ(s.cfOut);
     });
-  }catch(e){ if(id===readId){ lastText = s.cfFail; $("out").textContent = lastText; sayQ(lastText); } }
+  }catch(e){ if(id===readId){ lastText = shT(shop,s.cfFail); $("out").textContent = lastText; sayQ(lastText); } }
 }
+const carrefourSearch = q => shopSearch(q,SHOPS.cf);
 
 /* ---------- Radios tunisiennes et internationales (API Radio-Browser, comme dans Qitari) ---------- */
 const WR_HOSTS = ["https://de1.api.radio-browser.info","https://de2.api.radio-browser.info","https://nl1.api.radio-browser.info","https://at1.api.radio-browser.info"];
@@ -1514,8 +1525,10 @@ function playStation(st){
 const WR_ANY = new RegExp(WR_STATIONS.map(x=>"(?:"+x.rx.source+")").join("|"),"i");
 const WR_STOP_RE = new RegExp("(?:"+CAM_STOPW+")[^\\n]{0,20}(?:"+WR_ANY.source+")|(?:"+WR_ANY.source+")[^\\n]{0,20}(?:"+CAM_STOPW+")","i");
 const CMD = [
-  [CF_NEAR_RE, ()=>carrefourNear()],
-  [CF_RE, (t)=>{ const q = cfTerm(t); if(q) carrefourSearch(q); else { cfWait = Date.now(); speak(S().cfAsk); } }],
+  [GT_NEAR_RE, ()=>shopNear(SHOPS.gt)],
+  [GT_RE, (t)=>{ const q = cfTerm(t); if(q) shopSearch(q,SHOPS.gt); else { cfWait = Date.now(); cfShop = SHOPS.gt; speak(shT(SHOPS.gt,S().cfAsk)); } }],
+  [CF_NEAR_RE, ()=>shopNear(SHOPS.cf)],
+  [CF_RE, (t)=>{ const q = cfTerm(t); if(q) shopSearch(q,SHOPS.cf); else { cfWait = Date.now(); cfShop = SHOPS.cf; speak(S().cfAsk); } }],
   [WR_STOP_RE, ()=>stopAllRadio()],
   [RADIO_STOP_RE, ()=>stopAllRadio()],
   [WR_ANY, (t)=>{ const st = WR_STATIONS.find(x=>x.rx.test(t)); if(st) playStation(st); }],
@@ -1549,7 +1562,7 @@ const CMD = [
 ];
 function command(t){
   status("🎤 "+t);
-  if(cfWait){ const w = Date.now()-cfWait<20000; cfWait = 0; if(w && !/silence|stop|arr[êe]te|صمت|اسكت|توقف/i.test(t)){ carrefourSearch(cfTerm(t)||t); return; } }
+  if(cfWait){ const w = Date.now()-cfWait<20000; cfWait = 0; if(w && !/silence|stop|arr[êe]te|صمت|اسكت|توقف/i.test(t)){ shopSearch(cfTerm(t)||t,cfShop||SHOPS.cf); return; } }
   for(const [re,fn] of CMD){ if(re.test(t)){ fn(t); return; } } }
 
 function status(t){ $("status").textContent = t || ""; }
