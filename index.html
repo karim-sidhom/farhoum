@@ -1622,7 +1622,7 @@ function frArt(q){ q = String(q).trim(); if(/[\u0600-\u06FF]/.test(q)) return ""
 /* ---------- Voix ---------- */
 let lastText = "", speaking = false, listening = false, rec = null;
 let svcToken = 0, readId = 0, svcGen = 0, dishMode = false, serviceMode = false;
-function hush(){ svcToken++; svcGen++; readId++; dishMode = false; speechSynthesis.cancel(); }
+function hush(){ svcToken++; svcGen++; readId++; dishMode = false; speechSynthesis.cancel(); qrStop(); }
 function speak(text, add){
   lastText = add ? lastText+" "+text : text;
   $("out").textContent = lastText;
@@ -2911,6 +2911,129 @@ async function keepAwake(){
 }
 document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible" && hourOn) keepAwake(); });
 
+/* ---------- Adhan de Farhoum : horaires de salati (méthode Tunisie/Maghreb, Fajr 18°, Icha 17°), mosquée la plus proche et heure de l'iqama (pont salati ?bridge=1) ---------- */
+const ADH_NM = {ar:["الفجر","الظهر","العصر","المغرب","العشاء"], fr:["Fajr","Dohr","Asr","Maghreb","Icha"]};
+function adhTimes(lat,lng,dt0){
+  try{
+    const d2r = x=>x*Math.PI/180, r2 = x=>x*180/Math.PI, fa = a=>a-360*Math.floor(a/360), fh = h=>h-24*Math.floor(h/24);
+    const dt = dt0||new Date(), tz = -dt.getTimezoneOffset()/60;
+    let y = dt.getFullYear(), m = dt.getMonth()+1; const d = dt.getDate();
+    if(m<=2){ y--; m+=12; }
+    const A = Math.floor(y/100), B = 2-A+Math.floor(A/4);
+    const jd = Math.floor(365.25*(y+4716))+Math.floor(30.6001*(m+1))+d+B-1524.5, D = jd-2451545.0;
+    const g = fa(357.529+0.98560028*D), q = fa(280.459+0.98564736*D);
+    const Ls = fa(q+1.915*Math.sin(d2r(g))+0.020*Math.sin(d2r(2*g))), e = 23.439-0.00000036*D;
+    const RA = r2(Math.atan2(Math.cos(d2r(e))*Math.sin(d2r(Ls)),Math.cos(d2r(Ls))))/15;
+    const dec = r2(Math.asin(Math.sin(d2r(e))*Math.sin(d2r(Ls)))), EqT = q/15-fh(RA);
+    const Dh = 12+tz-lng/15-EqT;
+    const ha = (al,dir)=>{ const c = (Math.sin(d2r(al))-Math.sin(d2r(lat))*Math.sin(d2r(dec)))/(Math.cos(d2r(lat))*Math.cos(d2r(dec))); if(c>1||c<-1) return null; const h = r2(Math.acos(c))/15; return dir==="rise"?Dh-h:Dh+h; };
+    const asrA = r2(Math.atan(1/(1+Math.tan(d2r(Math.abs(lat-dec))))));
+    const v = [ha(-18,"rise"),Dh,ha(asrA,"set"),ha(-0.8333,"set"),ha(-17,"set")];
+    const out = v.map(h=>{ if(h===null||isNaN(h)) return null; h = fh(h); const hr = Math.floor(h), mn = Math.round((h-hr)*60); return (hr*60+mn)%1440; });
+    return out.every(x=>x!==null) ? out : null;
+  }catch(_){ return null; }
+}
+function adhClock(t){
+  const p = String(t).split(":"), h = parseInt(p[0],10), m = parseInt(p[1],10);
+  if(isNaN(h)||isNaN(m)) return String(t);
+  return L==="ar" ? "الساعة "+h+(m?" و"+m+" دقيقة":"") : h+" heures"+(m?" "+m:"");
+}
+/* Adhan audio : mêmes sources, même ordre d'essai et mêmes 5 vibrations que salati */
+const ADH_URLS = [
+  'https://kieda.online/adhan.mp3',
+  'https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Ali_Ibn_Ahmad_Mala_1_-_Al_Haram_Al_Maki_%28%D8%B9%D9%84%D9%8A_%D8%A8%D9%86_%D8%A3%D8%AD%D9%85%D8%AF_%D9%85%D9%84%D8%A7_-_%D8%A7%D9%84%D8%AD%D8%B1%D9%85_%D8%A7%D9%84%D9%85%D9%83%D9%8A%29.mp3',
+  'https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Abdulbasit_Abdusamad_1_-_Egypt_%28%D8%B9%D8%A8%D8%AF_%D8%A7%D9%84%D8%A8%D8%A7%D8%B3%D8%B7_%D8%B9%D8%A8%D8%AF_%D8%A7%D9%84%D8%B5%D9%85%D8%AF_-_%D9%85%D8%B5%D8%B1%29.mp3'
+];
+const ADH_VIB = [600,400,600,400,600,400,600,400,600], ADH_VIB_MS = ADH_VIB.reduce((x,y)=>x+y,0);
+let adhAudio = null;
+function adhAudioEl(){ if(!adhAudio){ adhAudio = new Audio(); adhAudio.preload = "auto"; } return adhAudio; }
+function adhUnlock(){
+  const a = adhAudioEl(); a.muted = true; a.src = ADH_URLS[0];
+  a.play().then(()=>{ a.pause(); a.currentTime = 0; a.muted = false; }).catch(()=>{ a.muted = false; });
+}
+document.addEventListener("pointerdown",adhUnlock,{once:true});
+function adhPlay(){
+  return new Promise(res=>{
+    const a = adhAudioEl(); let i = 0, done = false;
+    const fin = ok=>{ if(!done){ done = true; a.onerror = null; a.onended = null; res(ok); } };
+    const next = ()=>{
+      if(i>=ADH_URLS.length) return fin(false);
+      a.pause(); a.muted = false; a.src = ADH_URLS[i++];
+      a.onerror = next; a.onended = ()=>fin(true);
+      a.play().catch(next);
+    };
+    next();
+    setTimeout(()=>fin(true),420000);
+  });
+}
+async function adhAnnounce(i,lat,lng){
+  const nm = ADH_NM[L][i];
+  const intro = L==="ar" ? `حان الآن موعد أذان ${nm}.` : `C'est l'heure de l'adhan de ${nm}.`;
+  stopListen(); qrStop();
+  if(navigator.vibrate){ try{ navigator.vibrate(ADH_VIB); }catch(_){} }
+  const poiP = svcAskApp(SVC_ID["جامع"],lat,lng).catch(()=>null);
+  await new Promise(r=>setTimeout(r,navigator.vibrate ? ADH_VIB_MS+200 : 0));
+  const played = await adhPlay();
+  const poi = await poiP;
+  let txt;
+  if(!poi){
+    txt = L==="ar" ? "لم أجد مسجداً قريباً." : "Je ne trouve pas de mosquée proche.";
+  }else{
+    const mw = poi.mawaqit, iq = mw && mw.iqama && mw.iqama[i], where_ = svcDist(Math.round(poi.dist||0));
+    txt = L==="ar"
+      ? `أقرب مسجد: ${poi.name}، على بعد ${where_}. `+(iq ? `الإقامة ${adhClock(iq)}.` : "موعد الإقامة غير متوفر.")
+      : `La mosquée la plus proche : ${poi.name}, à ${where_}. `+(iq ? `L'iqama est à ${adhClock(iq)}.` : "L'horaire de l'iqama n'est pas disponible.");
+  }
+  speak(played ? txt : intro+" "+txt);
+}
+/* ---------- Coran selon Ali Al Barrak (Kairouan), lecture Qalun : même source audio et même hizb du jour que salati ---------- */
+const QR_BASE = 'https://dl.suratmp3.com/mp3/reciter/66/64/';
+let qrAudio = null, qrQueue = [], qrIdx = 0, qrOn = false, qrSeq = 0;
+function qrHizb(){
+  const now = new Date(), start = new Date(now.getFullYear(),0,0), doy = Math.floor((now-start)/86400000);
+  return ((doy-1)%60+60)%60+1;
+}
+function qrStop(){ qrOn = false; qrSeq++; if(qrAudio){ try{ qrAudio.pause(); }catch(_){} qrAudio.onended = qrAudio.onerror = null; } }
+function qrNext(){
+  if(!qrOn || qrIdx>=qrQueue.length){ qrOn = false; return; }
+  if(!qrAudio) qrAudio = new Audio();
+  const a = qrAudio, skip = ()=>{ qrIdx++; qrNext(); };
+  a.onended = skip; a.onerror = skip;
+  a.src = qrQueue[qrIdx];
+  a.play().catch(skip);
+}
+async function qrStart(){
+  qrStop(); const seq = ++qrSeq, h = qrHizb();
+  speak(L==="ar" ? `تلاوة القرآن بصوت علي البراق، رواية قالون، الحزب ${h}.` : `Récitation du Coran par Ali Al Barrak, lecture Qalun, hizb ${h}.`);
+  try{
+    const f = (h-1)*4+1;
+    const parts = await Promise.all([f,f+1,f+2,f+3].map(async q=>{
+      const r = await fetch(`https://api.alquran.cloud/v1/hizbQuarter/${q}/quran-uthmani`,{signal:AbortSignal.timeout(15000)});
+      if(!r.ok) throw new Error("status "+r.status);
+      const j = await r.json(); return (j.data && j.data.ayahs) || [];
+    }));
+    const nums = [...new Set(parts.flat().filter(a=>a.surah).map(a=>a.surah.number))];
+    if(!nums.length) throw new Error("vide");
+    await waitSpeech(); if(seq!==qrSeq) return;
+    qrQueue = nums.map(n=>QR_BASE+String(n).padStart(3,"0")+".mp3"); qrIdx = 0; qrOn = true;
+    micToMusic(); qrNext();
+  }catch(_){ if(seq===qrSeq) speak(L==="ar" ? "تعذّر تحميل التلاوة." : "Impossible de charger la récitation."); }
+}
+CMD.unshift([/coran|qur'?an|koran|قرآن|القرآن|قران|القران|براق|barrak|barak/i, ()=>qrStart()]);
+
+const adhDone = {}; let adhTimer = null;
+function adhTick(){
+  const p = gpsFix || (lastPos && {coords:{latitude:lastPos.lat,longitude:lastPos.lon}});
+  if(!p) return;
+  const lat = p.coords.latitude, lng = p.coords.longitude, now = new Date(), nowM = now.getHours()*60+now.getMinutes();
+  const tm = adhTimes(lat,lng,now); if(!tm) return;
+  for(let i=0;i<5;i++){
+    const key = now.toDateString()+"#"+i;
+    if(nowM>=tm[i] && nowM<tm[i]+3 && !adhDone[key]){ adhDone[key] = 1; adhAnnounce(i,lat,lng); break; }
+  }
+}
+function adhanStart(){ if(adhTimer) return; adhTick(); adhTimer = setInterval(adhTick,15000); }
+
 /* ---------- Description du lieu ---------- */
 /* ---------- Adresse parlée : gouvernorat, ville, quartier, rue (OpenStreetMap / Nominatim, sans clé) ---------- */
 const addrMem = {};
@@ -3079,6 +3202,7 @@ async function activate(){
     await askPermissions();
     if(hourOn){ scheduleHour(); keepAwake(); }
     trStart();
+    adhanStart();
     listening = !!SR && micOK;
     if(!listening){ speak(S().noMic); await waitSpeech(); }
     whereAmI();
