@@ -2659,19 +2659,11 @@ function hideRadio(){
 /* Même lecture GPS que Qitari : watchPosition continu, haute précision, maximumAge 2000, timeout 15000 */
 const GPS_OPTS = {enableHighAccuracy:true, maximumAge:2000, timeout:15000};
 let gpsWatchId = null, gpsFix = null, gpsWaiters = [];
-let gpsLast = [];   /* dernières lectures : la position n'est fixée qu'après 3 lectures successives identiques */
 function gpsAccept(p){
-  gpsLast.push(p); if(gpsLast.length>3) gpsLast.shift();
-  const same = gpsLast.length===3 && gpsLast.every(q=>q.coords.latitude===p.coords.latitude && q.coords.longitude===p.coords.longitude);
-  if(same){
-    /* garde la meilleure position : plus précise, ou l'actuelle est trop ancienne */
-    if(!gpsFix || p.coords.accuracy <= gpsFix.coords.accuracy || Date.now()-gpsFix.timestamp > 10000) gpsFix = p;
-    status(`GPS ±${Math.round(gpsFix.coords.accuracy)} m`);
-    gpsWaiters.splice(0).forEach(w=>w.res(gpsFix));
-  }else{
-    let n = 1; for(let i=gpsLast.length-2;i>=0;i--){ if(gpsLast[i].coords.latitude===p.coords.latitude && gpsLast[i].coords.longitude===p.coords.longitude) n++; else break; }
-    status(`GPS confirmation ${n}/3`);
-  }
+  /* garde la meilleure position : plus précise, ou l'actuelle est trop ancienne */
+  if(!gpsFix || p.coords.accuracy <= gpsFix.coords.accuracy || Date.now()-gpsFix.timestamp > 10000) gpsFix = p;
+  status(`GPS ±${Math.round(gpsFix.coords.accuracy)} m`);
+  gpsWaiters.splice(0).forEach(w=>w.res(gpsFix));
   maOnPos(p);
 }
 function gpsFail(e){
