@@ -3267,7 +3267,7 @@ async function askPermissions(){
   await waitSpeech();
   startGpsWatch();
 }
-let started = false, tapTimer = null, tap2Timer = null, pressTimer = null, pressFired = false, hushAt = 0;
+let started = false, tapTimer = null, tapN = 0, tapHush = false, pressTimer = null, pressFired = false, hushAt = 0;
 /* ---------- Résultats des championnats d'Europe (trois touchers) : mêmes données que football.html (worker football-data.org) ---------- */
 const FB_WORKER = "https://radiofoot.lordsidhom78.workers.dev";
 const FB_LEAGUES = [["PL","Premier League","الدوري الإنجليزي الممتاز"],["PD","Liga","الدوري الإسباني"],["SA","Serie A","الدوري الإيطالي"],["BL1","Bundesliga","الدوري الألماني"],["FL1","Ligue 1","الدوري الفرنسي"]];
@@ -3329,10 +3329,18 @@ go.onclick = ()=>{
   if(micPausedForMusic){ micPausedForMusic = false; listening = !!SR && micOK; startListen(); return; }   // musique/radio en cours : ce toucher ne fait que rallumer le micro
   if(!started){ activate(); return; }                                       // premier toucher : démarrage immédiat
   const now = Date.now();
-  if(tap2Timer){ clearTimeout(tap2Timer); tap2Timer = null; hushAt = 0; footballResults(); return; }   // trois touchers = résultats des championnats d'Europe
-  if(speechSynthesis.speaking && now-hushAt>600){ hush(); hushAt = now; return; }   // un toucher = silence
-  if(tapTimer || now-hushAt<=600){ clearTimeout(tapTimer); tapTimer = null; hushAt = 0; tap2Timer = setTimeout(()=>{ tap2Timer = null; serviceMenu(); },350); return; } // deux touchers = mode service seulement (la réponse passe par les commandes vocales) ; 350 ms d'attente d'un troisième toucher
-  tapTimer = setTimeout(()=>{ tapTimer = null; activate(); },350);          // un toucher = où suis-je
+  /* Les touchers sont comptés ensemble : l'action n'est choisie qu'après une pause de 600 ms, donc aucun nombre de touchers ne coupe les suivants.
+     1 = où suis-je · 2 = service · 3 = résultats des championnats d'Europe · 4 = musique libre ; un toucher pendant que Farhoum parle = silence (il compte comme 1er toucher) */
+  if(tapN===0 && speechSynthesis.speaking){ hush(); hushAt = now; tapHush = true; }
+  tapN++;
+  clearTimeout(tapTimer);
+  tapTimer = setTimeout(()=>{
+    const n = tapN, h = tapHush; tapN = 0; tapHush = false; tapTimer = null;
+    if(n===1){ if(!h) activate(); }
+    else if(n===2) serviceMenu();
+    else if(n===3) footballResults();
+    else playFreeMusic();
+  },600);
 };
 $("fc").onclick = forecast;
 $("menus").onclick = readRestos;
