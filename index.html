@@ -1556,7 +1556,8 @@ const T = {
     f2None:"Je n'ai rien trouvé.",f2Fail:"La recherche n'est pas disponible pour le moment.",
     f2At:(d,w)=>`à ${d}, ${w}.`,
     permGps:"Position",permMic:"Micro",permYes:"autorisé",permNo:"refusé",
-    waitMore:"Patientez un peu, je vais vous fournir des données plus poussées dans quelque temps. Si vous cherchez un sandwich, les menus, la radio, touchez deux fois de suite.",
+    waitMore:"Patientez un peu, je vais vous fournir des données plus poussées dans quelque temps. Si vous cherchez un sandwich, les menus, la radio, touchez deux fois de suite. Touchez trois fois si vous voulez entendre l'ensemble des résultats des championnats d'Europe.",
+    fbLoad:"Je cherche les résultats des championnats d'Europe.",fbHead:"Voici les résultats des championnats d'Europe.",fbFail:"Les résultats ne sont pas disponibles pour le moment.",
     cfAsk:"Quel produit cherchez-vous chez Carrefour ?",cfSearch:q=>`J'ai bien écouté, tu demandes ${q}, je cherche pour toi chez Carrefour.`,cfHead:q=>`Voici ce que j'ai trouvé pour ${q} chez Carrefour.`,
     cfNone:"Je n'ai rien trouvé chez Carrefour.",cfFail:"Carrefour n'est pas disponible pour le moment.",cfOut:"Épuisé.",cfNear:"Je cherche le Carrefour le plus proche.",cfNearHead:"Le Carrefour le plus proche.",cfNearNone:"Aucun Carrefour à moins de 30 kilomètres.",
     askService:"Quel service demandez-vous ? Sandwich, menus, radio…",
@@ -1606,7 +1607,8 @@ const T = {
     f2None:"لم أجد شيئاً.",f2Fail:"البحث غير متوفر حالياً.",
     f2At:(d,w)=>`على بعد ${d}، ${w}.`,
     permGps:"الموقع",permMic:"الميكروفون",permYes:"مسموح",permNo:"مرفوض",
-    waitMore:"انتظر قليلاً، سأوافيك بمعطيات أدق بعد قليل. إذا كنت تبحث عن ساندويتش أو قوائم أو إذاعة، المس الشاشة مرتين متتاليتين.",
+    waitMore:"انتظر قليلاً، سأوافيك بمعطيات أدق بعد قليل. إذا كنت تبحث عن ساندويتش أو قوائم أو إذاعة، المس الشاشة مرتين متتاليتين. المس الشاشة ثلاث مرات إذا أردت سماع جميع نتائج البطولات الأوروبية.",
+    fbLoad:"أبحث عن نتائج البطولات الأوروبية.",fbHead:"هذه نتائج البطولات الأوروبية.",fbFail:"النتائج غير متوفرة حالياً.",
     cfAsk:"أي منتج تبحث عنه في كارفور؟",cfSearch:q=>`سمعتك جيداً، أنت تطلب ${q}، أبحث لك عنه في كارفور.`,cfHead:q=>`هذا ما وجدته لـ ${q} في كارفور.`,
     cfNone:"لم أجد شيئاً في كارفور.",cfFail:"كارفور غير متوفر حالياً.",cfOut:"غير متوفر.",cfNear:"أبحث عن أقرب كارفور.",cfNearHead:"أقرب كارفور.",cfNearNone:"لا يوجد كارفور على بعد أقل من 30 كيلومتراً.",
     askService:"أي خدمة تطلب؟ ساندويتش، قوائم، إذاعة…",
@@ -3211,7 +3213,44 @@ async function askPermissions(){
   await waitSpeech();
   startGpsWatch();
 }
-let started = false, tapTimer = null, pressTimer = null, pressFired = false, hushAt = 0;
+let started = false, tapTimer = null, tap2Timer = null, pressTimer = null, pressFired = false, hushAt = 0;
+/* ---------- Résultats des championnats d'Europe (trois touchers) : mêmes données que football.html (worker football-data.org) ---------- */
+const FB_WORKER = "https://radiofoot.lordsidhom78.workers.dev";
+const FB_LEAGUES = [["PL","Premier League","الدوري الإنجليزي الممتاز"],["PD","Liga","الدوري الإسباني"],["SA","Serie A","الدوري الإيطالي"],["BL1","Bundesliga","الدوري الألماني"],["FL1","Ligue 1","الدوري الفرنسي"]];
+async function fbRaw(code,season){
+  try{ const r = await fetch(FB_WORKER+"/matches/"+code+(season?"?season="+season:"")); if(!r.ok) return []; const d = await r.json(); return (d&&d.matches)||[]; }catch(_){ return []; }
+}
+const fbDone = m => m.status==="FINISHED" && m.score && m.score.fullTime && m.score.fullTime.home!=null && m.score.fullTime.away!=null && m.homeTeam && m.awayTeam;
+async function fbLeague(code){
+  let fin = (await fbRaw(code)).filter(fbDone);
+  const y = new Date().getUTCFullYear();
+  for(let s=y-1; s>=y-4 && !fin.length; s--) fin = (await fbRaw(code,s)).filter(fbDone);   // hors saison : saison précédente, comme football.html
+  if(!fin.length) return null;
+  const mds = [...new Set(fin.map(m=>m.matchday))].sort((a,b)=>b-a);
+  let list = fin.filter(m=>m.matchday===mds[0]);
+  if(list.length<5 && mds[1]!=null) list = fin.filter(m=>m.matchday===mds[1]).concat(list);   // journée à peine commencée : on ajoute la précédente
+  return list.sort((a,b)=>new Date(a.utcDate)-new Date(b.utcDate));
+}
+function fbSentence(m){
+  const ar = L==="ar", h = m.homeTeam.shortName||m.homeTeam.name, a = m.awayTeam.shortName||m.awayTeam.name;
+  const hg = m.score.fullTime.home, ag = m.score.fullTime.away, d = Math.abs(hg-ag);
+  let t = h+" "+hg+(ar?"، ":", ")+a+" "+ag+". ";
+  if(hg===ag) t += hg===0 ? (ar?"تعادل سلبي.":"Match nul sans but.") : (ar?"تعادل.":"Match nul.");
+  else{ const w = hg>ag?h:a; t += ar ? "فوز "+w+" بفارق "+(d===1?"هدف واحد":d===2?"هدفين":d+" أهداف")+"." : w+" gagne par "+d+" but"+(d>1?"s":"")+" d'écart."; }
+  return t;
+}
+async function footballResults(){
+  svcToken++; svcGen++; speechSynthesis.cancel();
+  const id = ++readId, s = S();
+  lastText = s.fbLoad; $("out").textContent = lastText; sayQ(s.fbLoad);
+  const res = await Promise.all(FB_LEAGUES.map(l=>fbLeague(l[0])));
+  if(id!==readId) return;
+  if(!res.some(Boolean)){ lastText = s.fbFail; $("out").textContent = lastText; sayQ(s.fbFail); return; }
+  const parts = [s.fbHead];
+  res.forEach((list,i)=>{ if(!list) return; parts.push((L==="ar"?FB_LEAGUES[i][2]:FB_LEAGUES[i][1])+"."); list.forEach(m=>parts.push(fbSentence(m))); });
+  lastText = parts.join(" "); $("out").textContent = lastText;
+  parts.forEach(p=>sayQ(p));
+}
 function serviceMenu(){ serviceMode = true; svcGen++; speak(S().askService); }   // mode service : ni description du lieu ni services automatiques, un seul toucher pour revenir au lieu
 async function activate(){
   if(!started){
@@ -3236,8 +3275,9 @@ go.onclick = ()=>{
   if(micPausedForMusic){ micPausedForMusic = false; listening = !!SR && micOK; startListen(); return; }   // musique/radio en cours : ce toucher ne fait que rallumer le micro
   if(!started){ activate(); return; }                                       // premier toucher : démarrage immédiat
   const now = Date.now();
+  if(tap2Timer){ clearTimeout(tap2Timer); tap2Timer = null; hushAt = 0; footballResults(); return; }   // trois touchers = résultats des championnats d'Europe
   if(speechSynthesis.speaking && now-hushAt>600){ hush(); hushAt = now; return; }   // un toucher = silence
-  if(tapTimer || now-hushAt<=600){ clearTimeout(tapTimer); tapTimer = null; hushAt = 0; serviceMenu(); return; } // deux touchers = mode service seulement (la réponse passe par les commandes vocales)
+  if(tapTimer || now-hushAt<=600){ clearTimeout(tapTimer); tapTimer = null; hushAt = 0; tap2Timer = setTimeout(()=>{ tap2Timer = null; serviceMenu(); },350); return; } // deux touchers = mode service seulement (la réponse passe par les commandes vocales) ; 350 ms d'attente d'un troisième toucher
   tapTimer = setTimeout(()=>{ tapTimer = null; activate(); },350);          // un toucher = où suis-je
 };
 $("fc").onclick = forecast;
