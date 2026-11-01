@@ -1941,6 +1941,58 @@ function playStation(st){
     tryStation(https.concat(all.filter(x=>!https.includes(x))),0,tok,st.label);
   });
 }
+/* ---------- Musique libre : catalogue du worker « musique » (Internet Archive, Creative Commons). Farhoum lit les thèmes, puis les artistes, puis les titres ; l'opérateur choisit à la voix (numéro ou nom, « suivant » pour la suite) ---------- */
+const FM_W = "https://musique.lordsidhom78.workers.dev";
+const FREEMUSIC_RE = /(?:musique|music)\s+(?:libre|gratuite)|موسيقى\s+(?:حرة|مجانية)/i;
+let fm = {step:null, theme:null, artist:null, page:0, items:[], more:false, t:0};
+const FM_NUM = {"un":1,"une":1,"1":1,"deux":2,"2":2,"trois":3,"3":3,"quatre":4,"4":4,"cinq":5,"5":5,"six":6,"6":6,"sept":7,"7":7,"huit":8,"8":8,"neuf":9,"9":9,"dix":10,"10":10,"واحد":1,"اثنين":2,"اثنان":2,"ثلاثة":3,"ثلاث":3,"أربعة":4,"أربع":4,"خمسة":5,"خمس":5,"ستة":6,"سبعة":7,"ثمانية":8,"تسعة":9,"عشرة":10};
+const fmNorm = x => String(x||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().trim();
+const fmName = it => fm.step==="theme" ? (L==="ar"?it.ar:it.fr) : fm.step==="artist" ? it.name : it.title;
+async function fmGet(path){ const r = await fetch(FM_W+path); if(!r.ok) throw new Error(r.status); return r.json(); }
+function fmSay(){
+  const ar = L==="ar", head = {theme: ar?"هذه المواضيع.":"Voici les thèmes.", artist: ar?"هؤلاء الفنانون.":"Voici les artistes.", title: ar?"هذه العناوين.":"Voici les titres."}[fm.step];
+  const list = fm.items.map((x,i)=>(i+1)+", "+fmName(x)).join(". ");
+  const tail = ar ? "قل الرقم أو الاسم"+(fm.more?"، أو التالي":"")+"." : "Dites le numéro ou le nom"+(fm.more?", ou suivant":"")+".";
+  fm.t = Date.now(); speak(head+" "+list+". "+tail);
+}
+async function fmLoad(step,page){
+  const ar = L==="ar", e = encodeURIComponent;
+  const path = step==="theme" ? "/themes?page="+page : step==="artist" ? "/artists?theme="+e(fm.theme.id)+"&page="+page : "/titles?theme="+e(fm.theme.id)+"&artist="+e(fm.artist.name)+"&page="+page;
+  try{
+    const d = await fmGet(path);
+    if(!d.items || !d.items.length){ fm.step = null; speak(ar?"لا يوجد شيء متوفر.":"Rien de disponible."); return; }
+    fm.step = step; fm.page = page; fm.items = d.items; fm.more = !!d.more; fmSay();
+  }catch(_){ fm.step = null; speak(ar?"الموسيقى غير متوفرة حالياً.":"La musique n'est pas disponible pour le moment."); }
+}
+function playFreeMusic(){ hideRadio(); stopStation(); fm.theme = fm.artist = null; fmLoad("theme",0); }
+async function fmPlay(it){
+  const ar = L==="ar"; fm.step = null;
+  hideRadio(); stopStation(); const tok = stToken;
+  try{
+    const d = await fmGet("/tracks?id="+encodeURIComponent(it.id));
+    if(!d.items || !d.items.length){ speak(ar?"لا يوجد مقطع متوفر.":"Aucun morceau disponible."); return; }
+    const first = d.items[0], by = d.creator || fm.artist.name;
+    speak(first.title+(ar?"، لـ ":", par ")+by);
+    await waitSpeech(); if(tok!==stToken) return;
+    tryStation(d.items.map(x=>({url_resolved:x.url})),0,tok,first.title);
+  }catch(_){ speak(ar?"الموسيقى غير متوفرة حالياً.":"La musique n'est pas disponible pour le moment."); }
+}
+/* retourne true si la phrase a été traitée ici ; false = laisser les commandes habituelles (stop, etc.) */
+function fmHandle(t){
+  const ar = L==="ar", x = fmNorm(t).replace(/[٠-٩]/g,d=>d.charCodeAt(0)-1632);
+  if(/stop|arret|annul|silence|quitt|وقف|أوقف|اوقف|توقف|الغاء|إلغاء|صمت|اسكت/.test(x)){ fm.step = null; return false; }
+  if(/suivant|next|التالي|التالية|المزيد/.test(x)){ if(fm.more) fmLoad(fm.step,fm.page+1); else speak(ar?"لا يوجد المزيد.":"Il n'y en a pas d'autres."); return true; }
+  let idx = -1;
+  const w = x.split(/\s+/).find(w=>FM_NUM[w]!=null);
+  if(w!=null) idx = FM_NUM[w]-1;
+  else idx = fm.items.findIndex(it=>{ const n = fmNorm(fmName(it)); return n && (n.includes(x) || x.includes(n)); });
+  if(idx<0 || idx>=fm.items.length){ fm.t = Date.now(); speak(ar?"لم أفهم. قل الرقم أو الاسم.":"Je n'ai pas compris. Dites le numéro ou le nom."); return true; }
+  const it = fm.items[idx];
+  if(fm.step==="theme"){ fm.theme = it; fmLoad("artist",0); }
+  else if(fm.step==="artist"){ fm.artist = it; fmLoad("title",0); }
+  else fmPlay(it);
+  return true;
+}
 const WR_ANY = new RegExp(WR_STATIONS.map(x=>"(?:"+x.rx.source+")").join("|"),"i");
 const WR_STOP_RE = new RegExp("(?:"+CAM_STOPW+")[^\\n]{0,20}(?:"+WR_ANY.source+")|(?:"+WR_ANY.source+")[^\\n]{0,20}(?:"+CAM_STOPW+")","i");
 /* ---------- Wikipédia : on pose une question, Farhoum répond comme Aladin (même méthode que askEncyclopedia de la lampe d'Aladin) ---------- */
@@ -1975,6 +2027,7 @@ const CMD = [
   [CF_RE, (t)=>{ const q = cfTerm(t); if(q) shopSearch(q,SHOPS.cf); else { cfWait = Date.now(); cfShop = SHOPS.cf; speak(S().cfAsk); } }],
   [WR_STOP_RE, ()=>stopAllRadio()],
   [RADIO_STOP_RE, ()=>stopAllRadio()],
+  [FREEMUSIC_RE, ()=>playFreeMusic()],
   [WR_ANY, (t)=>{ const st = WR_STATIONS.find(x=>x.rx.test(t)); if(st) playStation(st); }],
   [RADIO_START_RE, ()=>showRadio()],
   [CAM_STOP_RE, ()=>camStop()],
@@ -2007,6 +2060,7 @@ const CMD = [
 ];
 function command(t){
   status("🎤 "+t);
+  if(fm.step && Date.now()-fm.t<90000 && fmHandle(t)) return;   // musique libre : choix du thème, de l'artiste, du titre
   if(cfWait){ const w = Date.now()-cfWait<20000; cfWait = 0; if(w && !/silence|stop|arr[êe]te|صمت|اسكت|توقف/i.test(t)){ shopSearch(cfTerm(t)||t,cfShop||SHOPS.cf); return; } }
   for(const [re,fn] of CMD){ if(re.test(t)){ fn(t); return; } } }
 
