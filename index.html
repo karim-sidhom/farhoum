@@ -3484,6 +3484,10 @@ window.RADIO_HTML = "<!DOCTYPE html>\n<html lang=\"ar\" dir=\"rtl\">\n<head>\n  
       u.onerror=function(ev){ if(!began && !anyTap && ev && ev.error==='not-allowed'){ fin=true; needTap(text, done); } else end(); };
       speechSynthesis.speak(u);
       if(act===null) setTimeout(function(){ if(!began && !fin && !anyTap){ fin=true; try{speechSynthesis.cancel();}catch(e){} needTap(text, done); } }, 2500);
+      /* iPhone : si la voix ne démarre pas (aucun événement), on ne reste pas bloqué : on passe à la suite */
+      setTimeout(function(){ if(!began && !fin){ try{speechSynthesis.cancel();}catch(e){} end(); } }, 4000);
+      /* iPhone : si onend n'arrive jamais, on libère après 15 s maximum */
+      setTimeout(function(){ if(!fin){ try{speechSynthesis.cancel();}catch(e){} end(); } }, 15000);
     }catch(e){ end(); }
   }
   function needTap(text, done){
