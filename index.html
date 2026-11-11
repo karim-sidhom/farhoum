@@ -442,6 +442,7 @@ button:focus-visible{outline:4px solid var(--accent);outline-offset:3px}
   <button id="lang">العربية</button>
 </div>
 <div id="out" role="status" aria-live="polite"></div>
+<nav id="numBar" aria-label="Pages 1 à 5"><button type="button" data-n="1">1</button><button type="button" data-n="2">2</button><button type="button" data-n="3">3</button><button type="button" data-n="4">4</button><button type="button" data-n="5">5</button></nav>
 <div id="mapPanel" hidden><div id="mapBar"><button id="mapSat" aria-label="Satellite">🛰️</button><button id="mapClose" aria-label="Fermer">✕</button></div><div id="mapBox"></div></div>
 <style>
 #vivrePanel{position:fixed;inset:0;z-index:9999;background:#000;display:flex;align-items:center;justify-content:center}
@@ -452,6 +453,14 @@ button:focus-visible{outline:4px solid var(--accent);outline-offset:3px}
 #qmapPanel iframe{width:100%;height:100%;border:0;display:block}
 #qmapClose{position:absolute;bottom:18px;left:12px;z-index:2;min-width:56px;min-height:56px;font-size:28px;border-radius:50%;border:2px solid #fff;background:rgba(0,0,0,.6);color:#fff}
 #vivreClose{position:absolute;top:12px;right:12px;z-index:2;min-width:56px;min-height:56px;font-size:28px;border-radius:50%;border:2px solid #fff;background:rgba(0,0,0,.6);color:#fff}
+</style>
+<style id="numBarCss">
+body{padding-bottom:calc(env(safe-area-inset-bottom) + 84px)}
+#numBar{position:fixed;left:0;right:0;bottom:0;z-index:10000;display:flex;gap:8px;direction:ltr;padding:8px 10px calc(8px + env(safe-area-inset-bottom));background:var(--bg);border-top:3px solid var(--accent)}
+#numBar button{flex:1;min-height:60px;font-size:1.8rem;font-weight:800;padding:0;border-radius:14px;border:3px solid var(--accent);background:var(--panel);color:var(--accent)}
+#numBar button:active{background:var(--accent);color:#0d1b3d}
+#mapPanel,#qmapPanel,#vivrePanel{padding-bottom:84px}
+#qmapClose{bottom:100px}
 </style>
 <div id="qmapPanel" hidden role="dialog" aria-label="Carte Qitari"><button id="qmapClose" aria-label="Fermer">✕</button></div>
 <textarea id="qmapSrc" hidden>&lt;!DOCTYPE html>
@@ -5702,6 +5711,7 @@ const T = {
     cfAsk:"Quel produit cherchez-vous chez Carrefour ?",cfSearch:q=>`J'ai bien écouté, tu demandes ${q}, je cherche pour toi chez Carrefour.`,cfHead:q=>`Voici ce que j'ai trouvé pour ${q} chez Carrefour.`,
     cfNone:"Je n'ai rien trouvé chez Carrefour.",cfFail:"Carrefour n'est pas disponible pour le moment.",cfOut:"Épuisé.",cfNear:"Je cherche le Carrefour le plus proche.",cfNearHead:"Le Carrefour le plus proche.",cfNearNone:"Aucun Carrefour à moins de 30 kilomètres.",
     askService:"Quel service demandez-vous ? Sandwich, menus, radio…",
+    pgNav:"Pages 1 à 5",pg:["Où suis-je","Carte Qitari","Mode service","Résultats des championnats d'Europe","Je veux vivre"],
     mapOpen:"Voici la carte.",mapNone:"La carte n'est pas disponible sans internet.",
     f2Wide:km=>`Rien dans 3 kilomètres. Voici ce qu'il y a dans ${km} kilomètres.`,f2Stat:(n,m,k)=>`J'ai lu ${n} restaurants dans ${k} kilomètres, dont ${m} avec un menu, et aucun plat ne correspond.`},
   ar:{tts:"ar-SA",title:"فرحوم",go:"أين أنا؟",repeat:"أعد",stop:"صمت",
@@ -5753,6 +5763,7 @@ const T = {
     cfAsk:"أي منتج تبحث عنه في كارفور؟",cfSearch:q=>`سمعتك جيداً، أنت تطلب ${q}، أبحث لك عنه في كارفور.`,cfHead:q=>`هذا ما وجدته لـ ${q} في كارفور.`,
     cfNone:"لم أجد شيئاً في كارفور.",cfFail:"كارفور غير متوفر حالياً.",cfOut:"غير متوفر.",cfNear:"أبحث عن أقرب كارفور.",cfNearHead:"أقرب كارفور.",cfNearNone:"لا يوجد كارفور على بعد أقل من 30 كيلومتراً.",
     askService:"أي خدمة تطلب؟ ساندويتش، قوائم، إذاعة…",
+    pgNav:"الصفحات من 1 إلى 5",pg:["أين أنا","خريطة قطاري","اختيار خدمة","نتائج البطولات الأوروبية","أريد أن أعيش"],
     mapOpen:"هذه هي الخريطة.",mapNone:"الخريطة غير متوفرة بدون إنترنت.",
     f2Wide:km=>`لا شيء في 3 كيلومترات. هذا ما وجدته في ${km} كيلومتر.`,f2Stat:(n,m,k)=>`قرأت ${n} مطعماً في ${k} كيلومتر، منها ${m} بقائمة، ولا طبق مطابق.`}
 };
@@ -7381,6 +7392,7 @@ function applyLang(){
   $("menus").textContent = s.menuBtn;
   $("hour").textContent = hourOn ? s.hrOn : s.hrOff;
   $("auto").textContent = $("auto").getAttribute("aria-pressed")==="true" ? s.autoOn : s.autoOff;
+  numBarLang();
 }
 let micOK = false;
 function waitSpeech(){
@@ -7531,6 +7543,33 @@ go.onclick = ()=>{
   if(tapTimer || now-hushAt<=600){ clearTimeout(tapTimer); tapTimer = null; hushAt = 0; tap2Timer = setTimeout(()=>{ tap2Timer = null; qmapOpen(); },600); return; } // deux touchers = carte Qitari
   tapTimer = setTimeout(()=>{ tapTimer = null; activate(); },600);          // un toucher = où suis-je
 };
+/* ---------- Boutons 1 à 5 : changer de page par un numéro, annoncé à voix haute (TalkBack) ---------- */
+function numBarLang(){
+  const s = S();
+  $("numBar").setAttribute("aria-label", s.pgNav);
+  document.querySelectorAll("#numBar button").forEach(b=>{ const n = +b.dataset.n; b.setAttribute("aria-label", n+", "+s.pg[n-1]); });
+}
+let numTok = 0;
+async function numGo(n){
+  const tok = ++numTok;
+  [tapTimer,tap2Timer,tap3Timer,tap4Timer].forEach(t=>clearTimeout(t)); tapTimer = tap2Timer = tap3Timer = tap4Timer = null; hushAt = 0;
+  if(!started){
+    await activate();                                  // premier appui : démarrage, comme le premier toucher
+    if(n===1) return;
+    await waitSpeech(); if(tok!==numTok) return;
+  }
+  qmapClose(); vivreClose(); hideMap();                // la page précédente se ferme
+  hush();
+  if(micPausedForMusic){ micPausedForMusic = false; listening = !!SR && micOK; }
+  speak(n+". "+S().pg[n-1]+".");                       // la page est annoncée
+  await waitSpeech(); if(tok!==numTok) return;
+  if(n===1) whereAmI();
+  else if(n===2) qmapOpen();
+  else if(n===3) serviceMenu();
+  else if(n===4) footballResults();
+  else vivreOpen();
+}
+document.querySelectorAll("#numBar button").forEach(b=>{ b.onclick = ()=>numGo(+b.dataset.n); });
 $("fc").onclick = forecast;
 $("menus").onclick = readRestos;
 $("hour").onclick = ()=>{
