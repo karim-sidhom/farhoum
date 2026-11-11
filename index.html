@@ -1564,7 +1564,7 @@ const T = {
     f2At:(d,w)=>`à ${d}, ${w}.`,
     permGps:"Position",permMic:"Micro",permYes:"autorisé",permNo:"refusé",
     waitMore:"Patientez un peu, je vais vous fournir des données plus poussées dans quelque temps. Si vous cherchez un sandwich, les menus, la radio, touchez deux fois de suite. Touchez trois fois si vous voulez entendre l'ensemble des résultats des championnats d'Europe.",
-    fbLoad:"Je cherche les résultats des championnats d'Europe.",fbHead:"Voici les résultats des championnats d'Europe.",fbFail:"Les résultats ne sont pas disponibles pour le moment.",
+    fbLoad:"Je cherche les résultats des championnats d'Europe.",fbHead:"Voici les résultats des championnats d'Europe.",fbFail:"Les résultats ne sont pas disponibles pour le moment.",fbTab:"Classement.",fbPts:["point","points"],
     cfAsk:"Quel produit cherchez-vous chez Carrefour ?",cfSearch:q=>`J'ai bien écouté, tu demandes ${q}, je cherche pour toi chez Carrefour.`,cfHead:q=>`Voici ce que j'ai trouvé pour ${q} chez Carrefour.`,
     cfNone:"Je n'ai rien trouvé chez Carrefour.",cfFail:"Carrefour n'est pas disponible pour le moment.",cfOut:"Épuisé.",cfNear:"Je cherche le Carrefour le plus proche.",cfNearHead:"Le Carrefour le plus proche.",cfNearNone:"Aucun Carrefour à moins de 30 kilomètres.",
     askService:"Quel service demandez-vous ? Sandwich, menus, radio…",
@@ -1615,7 +1615,7 @@ const T = {
     f2At:(d,w)=>`على بعد ${d}، ${w}.`,
     permGps:"الموقع",permMic:"الميكروفون",permYes:"مسموح",permNo:"مرفوض",
     waitMore:"انتظر قليلاً، سأوافيك بمعطيات أدق بعد قليل. إذا كنت تبحث عن ساندويتش أو قوائم أو إذاعة، المس الشاشة مرتين متتاليتين. المس الشاشة ثلاث مرات إذا أردت سماع جميع نتائج البطولات الأوروبية.",
-    fbLoad:"أبحث عن نتائج البطولات الأوروبية.",fbHead:"هذه نتائج البطولات الأوروبية.",fbFail:"النتائج غير متوفرة حالياً.",
+    fbLoad:"أبحث عن نتائج البطولات الأوروبية.",fbHead:"هذه نتائج البطولات الأوروبية.",fbFail:"النتائج غير متوفرة حالياً.",fbTab:"الترتيب.",fbPts:["نقطة","نقطة"],
     cfAsk:"أي منتج تبحث عنه في كارفور؟",cfSearch:q=>`سمعتك جيداً، أنت تطلب ${q}، أبحث لك عنه في كارفور.`,cfHead:q=>`هذا ما وجدته لـ ${q} في كارفور.`,
     cfNone:"لم أجد شيئاً في كارفور.",cfFail:"كارفور غير متوفر حالياً.",cfOut:"غير متوفر.",cfNear:"أبحث عن أقرب كارفور.",cfNearHead:"أقرب كارفور.",cfNearNone:"لا يوجد كارفور على بعد أقل من 30 كيلومتراً.",
     askService:"أي خدمة تطلب؟ ساندويتش، قوائم، إذاعة…",
@@ -3278,8 +3278,11 @@ let started = false, tapTimer = null, tap2Timer = null, tap3Timer = null, pressT
 /* ---------- Résultats des championnats d'Europe (trois touchers) : mêmes données que football.html (worker football-data.org) ---------- */
 const FB_WORKER = "https://radiofoot.lordsidhom78.workers.dev";
 const FB_LEAGUES = [["PL","Premier League","الدوري الإنجليزي الممتاز"],["PD","Liga","الدوري الإسباني"],["SA","Serie A","الدوري الإيطالي"],["BL1","Bundesliga","الدوري الألماني"],["FL1","Ligue 1","الدوري الفرنسي"]];
+const fbCache = {};
 async function fbRaw(code,season){
-  try{ const r = await fetch(FB_WORKER+"/matches/"+code+(season?"?season="+season:"")); if(!r.ok) return []; const d = await r.json(); return (d&&d.matches)||[]; }catch(_){ return []; }
+  const k = code+":"+(season||"cur"), c = fbCache[k];
+  if(c && Date.now()-c.t<600000) return c.v;   // même appel déjà fait il y a moins de 10 min : pas de nouvelle requête (quota du worker)
+  try{ const r = await fetch(FB_WORKER+"/matches/"+code+(season?"?season="+season:"")); if(!r.ok) return []; const d = await r.json(); const v = (d&&d.matches)||[]; fbCache[k] = {t:Date.now(),v:v}; return v; }catch(_){ return []; }
 }
 const fbDone = m => m.status==="FINISHED" && m.score && m.score.fullTime && m.score.fullTime.home!=null && m.score.fullTime.away!=null && m.homeTeam && m.awayTeam;
 async function fbLeague(code){
@@ -3292,6 +3295,24 @@ async function fbLeague(code){
   if(list.length<5 && mds[1]!=null) list = fin.filter(m=>m.matchday===mds[1]).concat(list);   // journée à peine commencée : on ajoute la précédente
   return list.sort((a,b)=>new Date(a.utcDate)-new Date(b.utcDate));
 }
+function fbCompute(raw){
+  const T = {};
+  raw.filter(fbDone).forEach(m=>{
+    const ft = m.score.fullTime;
+    [m.homeTeam,m.awayTeam].forEach(t=>{ if(!T[t.id]) T[t.id] = {name:t.shortName||t.name||"?",gf:0,ga:0,pts:0}; });
+    const H = T[m.homeTeam.id], A = T[m.awayTeam.id];
+    H.gf += ft.home; H.ga += ft.away; A.gf += ft.away; A.ga += ft.home;
+    if(ft.home>ft.away) H.pts += 3; else if(ft.home<ft.away) A.pts += 3; else { H.pts++; A.pts++; }
+  });
+  return Object.keys(T).map(k=>T[k]).sort((x,y)=>y.pts-x.pts||(y.gf-y.ga)-(x.gf-x.ga)||y.gf-x.gf||x.name.localeCompare(y.name)).map((t,i)=>({pos:i+1,name:t.name,pts:t.pts}));
+}
+async function fbTable(code){   // calculé depuis les mêmes matchs (en cache) que les résultats : aucune requête en plus
+  let rows = fbCompute(await fbRaw(code));
+  const y = new Date().getUTCFullYear();
+  for(let s=y-1; s>=y-4 && !rows.length; s--) rows = fbCompute(await fbRaw(code,s));
+  return rows.length ? rows : null;
+}
+function fbTableSentence(t,s){ return t.pos+(L==="ar"?"، ":", ")+t.name+(L==="ar"?"، ":", ")+t.pts+" "+(t.pts===1?s.fbPts[0]:s.fbPts[1])+"."; }
 function fbSentence(m){
   const ar = L==="ar", h = m.homeTeam.shortName||m.homeTeam.name, a = m.awayTeam.shortName||m.awayTeam.name;
   const hg = m.score.fullTime.home, ag = m.score.fullTime.away, d = Math.abs(hg-ag);
@@ -3305,10 +3326,11 @@ async function footballResults(){
   const id = ++readId, s = S();
   lastText = s.fbLoad; $("out").textContent = lastText; sayQ(s.fbLoad);
   const res = await Promise.all(FB_LEAGUES.map(l=>fbLeague(l[0])));
+  const tabs = await Promise.all(FB_LEAGUES.map(l=>fbTable(l[0])));
   if(id!==readId) return;
   if(!res.some(Boolean)){ lastText = s.fbFail; $("out").textContent = lastText; sayQ(s.fbFail); return; }
   const parts = [s.fbHead];
-  res.forEach((list,i)=>{ if(!list) return; parts.push((L==="ar"?FB_LEAGUES[i][2]:FB_LEAGUES[i][1])+"."); list.forEach(m=>parts.push(fbSentence(m))); });
+  res.forEach((list,i)=>{ if(!list) return; parts.push((L==="ar"?FB_LEAGUES[i][2]:FB_LEAGUES[i][1])+"."); list.forEach(m=>parts.push(fbSentence(m))); if(tabs[i]){ parts.push(s.fbTab); tabs[i].forEach(t=>parts.push(fbTableSentence(t,s))); } });
   lastText = parts.join(" "); $("out").textContent = lastText;
   parts.forEach(p=>sayQ(p));
 }
