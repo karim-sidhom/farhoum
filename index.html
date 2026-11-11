@@ -3350,10 +3350,10 @@ go.onclick = ()=>{
   if(!started){ activate(); return; }                                       // premier toucher : démarrage immédiat
   const now = Date.now();
   if(tap3Timer){ clearTimeout(tap3Timer); tap3Timer = null; hushAt = 0; vivreOpen(); return; }   // quatre touchers = vidéo « Je veux vivre » (Hamdai BSG) — participation des aveugles
-  if(tap2Timer){ clearTimeout(tap2Timer); tap2Timer = null; hushAt = 0; tap3Timer = setTimeout(()=>{ tap3Timer = null; footballResults(); },350); return; }   // trois touchers = résultats des championnats d'Europe ; 350 ms d'attente d'un quatrième toucher
+  if(tap2Timer){ clearTimeout(tap2Timer); tap2Timer = null; hushAt = 0; tap3Timer = setTimeout(()=>{ tap3Timer = null; footballResults(); },600); return; }   // trois touchers = résultats des championnats d'Europe ; 350 ms d'attente d'un quatrième toucher
   if(speechSynthesis.speaking && now-hushAt>600){ hush(); hushAt = now; return; }   // un toucher = silence
-  if(tapTimer || now-hushAt<=600){ clearTimeout(tapTimer); tapTimer = null; hushAt = 0; tap2Timer = setTimeout(()=>{ tap2Timer = null; serviceMenu(); },350); return; } // deux touchers = mode service seulement (la réponse passe par les commandes vocales) ; 350 ms d'attente d'un troisième toucher
-  tapTimer = setTimeout(()=>{ tapTimer = null; activate(); },350);          // un toucher = où suis-je
+  if(tapTimer || now-hushAt<=600){ clearTimeout(tapTimer); tapTimer = null; hushAt = 0; tap2Timer = setTimeout(()=>{ tap2Timer = null; serviceMenu(); },600); return; } // deux touchers = mode service seulement (la réponse passe par les commandes vocales) ; 350 ms d'attente d'un troisième toucher
+  tapTimer = setTimeout(()=>{ tapTimer = null; activate(); },600);          // un toucher = où suis-je
 };
 $("fc").onclick = forecast;
 $("menus").onclick = readRestos;
