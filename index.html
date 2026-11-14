@@ -7833,5 +7833,256 @@ window.RADIO_HTML = "<!DOCTYPE html>\n<html lang=\"ar\" dir=\"rtl\">\n<head>\n  
   setTimeout(startAutoRub, 1100);
 })();
 </script>
+<style id="fh-a11y-css">
+html.hc{--bg:#000;--fg:#fff;--accent:#ff0;--muted:#fff;--panel:#000}
+html.hc button{border:4px solid #fff}
+html.sr body{overflow:auto}
+html.sr .row{position:static;width:auto;height:auto;overflow:visible;clip:auto;white-space:normal;display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0}
+html.sr #go{min-height:32vh;font-size:1.6rem}
+</style>
+<script id="fh-a11y">
+/* ===== Farhoum : TalkBack + voix (patch) ===== */
+(function(){
+  var LS=window.localStorage;
+  function g(k,d){try{var v=LS.getItem(k);return v==null?d:v;}catch(e){return d;}}
+  function p(k,v){try{LS.setItem(k,v);}catch(e){}}
+  function isFr(){return L==='fr';}
+  var rate=parseFloat(g('fhRate','0.95'))||0.95;
+  var sr=g('fhSR','0')==='1', hc=g('fhHC','0')==='1';
+  var HTML=document.documentElement;
+
+  /* ---- 1. Retours sonores / vibrations standardisés ---- */
+  var ac=null;
+  function vib(x){try{if(navigator.vibrate)navigator.vibrate(x);}catch(e){}}
+  function beep(f,d){try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();var o=ac.createOscillator(),gn=ac.createGain();o.frequency.value=f;gn.gain.value=.08;o.connect(gn);gn.connect(ac.destination);o.start();o.stop(ac.currentTime+d);}catch(e){}}
+  function fb(kind){
+    if(kind==='ok'){vib(40);beep(880,.08);}
+    else if(kind==='err'){vib([60,40,60]);beep(220,.18);}
+    else if(kind==='danger'){vib(400);beep(520,.3);}
+    else if(kind==='listen'){beep(660,.05);}
+  }
+  window.fhFeedback=fb;
+
+  /* ---- 2. Choix de la voix ---- */
+  function vlang(v){return v.lang.replace('_','-').toLowerCase();}
+  function allVoices(){return window.speechSynthesis?speechSynthesis.getVoices():[];}
+  function voicesFor(l2){return allVoices().filter(function(v){return vlang(v).indexOf(l2)===0;});}
+  function pick(l2){
+    var vs=voicesFor(l2), saved=g('fhV_'+l2,'');
+    if(saved){var s=vs.filter(function(v){return v.voiceURI===saved;})[0]; if(s)return s;}
+    var order=l2==='ar'?['ar-tn','ar-sa']:['fr-fr'];
+    for(var i=0;i<order.length;i++){
+      var m=vs.filter(function(v){return vlang(v)===order[i];});
+      var best=m.filter(function(v){return v.localService;})[0]||m[0];
+      if(best)return best;
+    }
+    return vs.filter(function(v){return v.localService;})[0]||vs[0]||null;
+  }
+
+  /* ---- 3. Découpage : phrases courtes + langue par morceau ---- */
+  function split(text){
+    var out=[];
+    String(text).split(/(?<=[.!?\u061F\u2026])\s+|\n+/).forEach(function(sent){
+      sent=sent.trim(); if(!sent)return;
+      var parts=sent.length>220?sent.split(/(?<=[,\u060C;\u061B:])\s+/):[sent];
+      parts.forEach(function(s){
+        var re=/([\u0600-\u06FF][\u0600-\u06FF\s\u060C\u061B\u061F0-9\u0660-\u0669.,:!?-]*)|([^\u0600-\u06FF]+)/g, m;
+        while((m=re.exec(s))){
+          var t=(m[0]||'').trim();
+          if(!/[\p{L}\p{N}]/u.test(t))continue;
+          out.push({t:t,l:m[1]?'ar':'fr'});
+        }
+      });
+    });
+    return out;
+  }
+  var warnedAr=false;
+  var afterSpeak=false;
+
+  speak=function(text,add){
+    text=String(text==null?'':text);
+    lastText=add?lastText+' '+text:text;
+    $('out').textContent=lastText;
+    if(!('speechSynthesis' in window))return;
+    if(!add){svcToken++;readId++;speechSynthesis.cancel();}
+    var parts=split(text);
+    if(!parts.length)return;
+    speaking=true; stopListen(); afterSpeak=true;
+    if(!warnedAr && parts.some(function(x){return x.l==='ar';}) && allVoices().length && !voicesFor('ar').length){
+      warnedAr=true;
+      var w=new SpeechSynthesisUtterance("Aucune voix arabe n'est installée. Installez les données vocales arabes dans les paramètres de la synthèse vocale Google.");
+      w.lang='fr-FR'; w.rate=rate; speechSynthesis.speak(w);
+    }
+    parts.forEach(function(seg,i){
+      var u=new SpeechSynthesisUtterance(seg.t), v=pick(seg.l);
+      if(v){u.voice=v;u.lang=v.lang;} else {u.lang=seg.l==='ar'?'ar-SA':'fr-FR';}
+      u.rate=rate;
+      if(i===parts.length-1){u.onend=u.onerror=speakDone;}
+      speechSynthesis.speak(u);
+    });
+  };
+  /* annonce prioritaire : coupe tout, vibre fort, parle tout de suite */
+  window.fhUrgent=function(text){fb('danger');speak(text,false);};
+
+  /* ---- 4. Reconnaissance vocale : ar-TN, alternatives, retours ---- */
+  var netWarned=false;
+  function stripDia(t){return t.replace(/[\u064B-\u0652\u0640]/g,'');}
+  function handled(t){
+    try{
+      if(CMD.some(function(c){return c[0].test(t);}))return true;
+      if(typeof DISH_RE!=='undefined'&&DISH_RE.test(t))return true;
+      if(typeof fm!=='undefined'&&fm.step)return true;
+      if(typeof cfWait!=='undefined'&&cfWait)return true;
+    }catch(e){}
+    return false;
+  }
+  startListen=function(){
+    if(!SR||rec||speaking)return;
+    rec=new SR();
+    rec.lang=(L==='ar')?'ar-TN':S().tts;
+    rec.continuous=true; rec.interimResults=false; rec.maxAlternatives=3;
+    rec.onstart=function(){if(afterSpeak){afterSpeak=false;fb('listen');}};
+    rec.onresult=function(e){
+      var r=e.results[e.results.length-1], alts=[], i;
+      for(i=0;i<r.length;i++)alts.push(String(r[i].transcript).toLowerCase().trim());
+      var hit=null;
+      for(i=0;i<alts.length&&!hit;i++){
+        if(handled(alts[i]))hit=alts[i];
+        else if(handled(stripDia(alts[i])))hit=stripDia(alts[i]);
+      }
+      if(hit){fb('ok');command(hit);}
+      else{fb('err');command(alts[0]);}
+    };
+    rec.onerror=function(ev){
+      if(ev.error==='not-allowed'||ev.error==='service-not-allowed'){listening=false;fb('err');}
+      else if(ev.error==='network'&&!netWarned){
+        netWarned=true;fb('err');setTimeout(function(){netWarned=false;},60000);
+        speak(isFr()?'Reconnaissance vocale indisponible sans connexion.':'التعرف على الصوت غير متاح بدون اتصال.');
+      }
+    };
+    rec.onend=function(){rec=null;if(listening&&!speaking)setTimeout(startListen,300);};
+    try{rec.start();}catch(_){rec=null;}
+  };
+
+  /* ---- 5. Réglages : vitesse, voix, contraste, mode lecteur d'écran ---- */
+  function rateStep(d){
+    rate=Math.max(.7,Math.min(1.8,Math.round((rate+d)*100)/100)); p('fhRate',rate);
+    fb('ok');
+    speak(isFr()?('Vitesse '+rate.toFixed(2).replace(/0$/,'')):('السرعة '+rate.toFixed(2)));
+  }
+  function cycleVoice(){
+    var l2=L==='ar'?'ar':'fr', vs=voicesFor(l2);
+    if(!vs.length){fb('err');speak(isFr()?'Aucune autre voix disponible.':'لا توجد أصوات أخرى.');return;}
+    var cur=pick(l2), idx=vs.indexOf(cur), nx=vs[(idx+1)%vs.length];
+    p('fhV_'+l2,nx.voiceURI); fb('ok');
+    speak(isFr()?'Nouvelle voix.':'صوت جديد.');
+  }
+  function setHC(on){hc=on;p('fhHC',on?'1':'0');HTML.classList.toggle('hc',on);refresh();}
+  function setSR(on,auto){
+    sr=on;p('fhSR',on?'1':'0'); if(!on&&!auto)p('fhSRoff','1'); if(on)p('fhSRoff','0');
+    HTML.classList.toggle('sr',on);
+    var o=$('out'); if(o)o.setAttribute('aria-live',on?'off':'polite');
+    refresh();
+    if(!auto)speak(on?(isFr()?'Mode lecteur d\'écran activé. Utilisez les boutons.':'تم تفعيل وضع قارئ الشاشة. استخدم الأزرار.'):(isFr()?'Mode lecteur d\'écran désactivé.':'تم إيقاف وضع قارئ الشاشة.'));
+  }
+  var BTN=[
+    {id:'fhHelp',fr:'Aide',ar:'مساعدة',fn:function(){speak(S().help);}},
+    {id:'fhMap',fr:'Carte',ar:'خريطة',fn:function(){qmapOpen();}},
+    {id:'fhSvc',fr:'Mode service',ar:'وضع الخدمة',fn:function(){serviceMenu();}},
+    {id:'fhFoot',fr:'Résultats football',ar:'نتائج كرة القدم',fn:function(){footballResults();}},
+    {id:'fhVid',fr:'Vidéo Je veux vivre',ar:'فيديو أريد أن أعيش',fn:function(){vivreOpen();}},
+    {id:'fhFast',fr:'Voix plus rapide',ar:'صوت أسرع',fn:function(){rateStep(.15);}},
+    {id:'fhSlow',fr:'Voix plus lente',ar:'صوت أبطأ',fn:function(){rateStep(-.15);}},
+    {id:'fhVoice',fr:'Changer de voix',ar:'تغيير الصوت',fn:cycleVoice},
+    {id:'fhSR',tog:function(){return sr;},fr:'Mode lecteur d\'écran',ar:'وضع قارئ الشاشة',fn:function(){setSR(!sr);}},
+    {id:'fhHC',tog:function(){return hc;},fr:'Contraste élevé',ar:'تباين عالٍ',fn:function(){setHC(!hc);}}
+  ];
+  var row=document.querySelector('.row');
+  BTN.forEach(function(b){
+    var el=document.createElement('button'); el.type='button'; el.id=b.id;
+    if(b.tog)el.setAttribute('aria-pressed','false');
+    el.addEventListener('click',b.fn);
+    if(row)row.appendChild(el);
+  });
+  function refresh(){
+    BTN.forEach(function(b){
+      var el=document.getElementById(b.id); if(!el)return;
+      var t=isFr()?b.fr:b.ar;
+      if(b.tog){var on=b.tog(); t+=(isFr()?' : ':': ')+(on?(isFr()?'oui':'نعم'):(isFr()?'non':'لا')); el.setAttribute('aria-pressed',on?'true':'false');}
+      el.textContent=t; el.lang=isFr()?'fr':'ar';
+    });
+    var go=$('go'); if(go){
+      var base=(S().aria||S().go||'Farhoum');
+      go.setAttribute('aria-label',base+(isFr()?'. Double-touchez pour activer.':'. انقر مرتين للتفعيل.'));
+    }
+    var o=$('out'); if(o)o.lang=L;
+    var lb=$('lang'); if(lb)lb.lang=isFr()?'ar':'fr';
+    var mp=$('mapPanel'); if(mp)mp.setAttribute('aria-label',isFr()?'Carte':'خريطة');
+  }
+  var _al=applyLang;
+  applyLang=function(){_al.apply(this,arguments);refresh();};
+
+  /* commandes vocales supplémentaires */
+  CMD.unshift(
+    [/plus vite|acc[ée]l[èe]re|أسرع/i,function(){rateStep(.15);}],
+    [/plus lent|ralenti|أبطأ/i,function(){rateStep(-.15);}],
+    [/(autre|changer de|change la) voix|صوت آخر|غير الصوت/i,cycleVoice],
+    [/contraste|تباين/i,function(){setHC(!hc);}],
+    [/lecteur d.?[ée]cran|talkback|قارئ الشاشة/i,function(){setSR(!sr);}]
+  );
+
+  /* ---- 6. TalkBack : détection + toucher simple remplacé par activation directe ---- */
+  var lastPD=0;
+  document.addEventListener('pointerdown',function(){lastPD=Date.now();},true);
+  document.addEventListener('click',function(e){
+    if(!sr&&e.isTrusted&&g('fhSRoff','0')!=='1'&&Date.now()-lastPD>1500)setSR(true,true);
+  },true);
+  var goBtn=$('go');
+  if(goBtn)goBtn.addEventListener('click',function(e){
+    if(!sr)return;
+    if(typeof started==='undefined'||!started)return;
+    if(typeof micPausedForMusic!=='undefined'&&micPausedForMusic)return;
+    e.stopImmediatePropagation();
+    if(window.speechSynthesis&&speechSynthesis.speaking){hush();return;}
+    activate();
+  },true);
+
+  /* ---- 7. Panneaux : focus + fond inerte ---- */
+  var BG=['title','go','out','numBar'];
+  function setBG(inert){
+    BG.forEach(function(id){var e=document.getElementById(id);if(e)e.inert=inert;});
+    if(row)row.inert=inert;
+  }
+  ['mapPanel','qmapPanel','vivrePanel'].forEach(function(id){
+    var el=document.getElementById(id); if(!el)return; var prev=null;
+    if(id==='mapPanel'){el.setAttribute('role','dialog');el.setAttribute('aria-modal','true');}
+    new MutationObserver(function(){
+      if(!el.hidden){prev=document.activeElement;setBG(true);var b=el.querySelector('button');if(b)setTimeout(function(){b.focus();},50);}
+      else{setBG(false);if(prev&&prev.focus){try{prev.focus();}catch(x){}}prev=null;}
+    }).observe(el,{attributes:true,attributeFilter:['hidden']});
+  });
+  var ms=document.getElementById('mapSat');
+  if(ms){ms.setAttribute('aria-pressed','false');ms.addEventListener('click',function(){ms.setAttribute('aria-pressed',ms.getAttribute('aria-pressed')==='true'?'false':'true');});}
+
+  /* ---- 8. Écran de démarrage : ne plus gêner TalkBack une fois fini ---- */
+  var sp=document.getElementById('lampSplash'), n=0;
+  var tmr=setInterval(function(){
+    n++; if(!sp||!sp.isConnected||n>180){clearInterval(tmr);return;}
+    var cs=getComputedStyle(sp);
+    if(cs.display==='none'||cs.visibility==='hidden'||parseFloat(cs.opacity)===0||sp.offsetWidth===0){
+      sp.inert=true;sp.style.pointerEvents='none';clearInterval(tmr);
+    }
+  },1000);
+
+  /* ---- 9. Hors ligne ---- */
+  if('serviceWorker' in navigator&&location.protocol.indexOf('http')===0)
+    navigator.serviceWorker.register('fh-sw.js').catch(function(){});
+
+  HTML.classList.toggle('hc',hc);HTML.classList.toggle('sr',sr);
+  var o0=$('out'); if(o0&&sr)o0.setAttribute('aria-live','off');
+  refresh();
+})();
+</script>
+
 </body>
 </html>
