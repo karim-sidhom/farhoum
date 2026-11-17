@@ -7564,7 +7564,7 @@ async function numGo(n){
   speak(n+". "+S().pg[n-1]+".");                       // la page est annoncée
   await waitSpeech(); if(tok!==numTok) return;
   if(n===1) whereAmI();
-  else if(n===2) qmapOpen();
+  else if(n===2) window.location.href = "https://farhoum2.kieda.online";   // bouton 2 : ouvre farhoum2
   else if(n===3) serviceMenu();
   else if(n===4) footballResults();
   else vivreOpen();
